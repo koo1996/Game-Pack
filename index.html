@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>선수 강화 시뮬레이터</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 컨셉: 한 손으로 조작하는 어두운 남색 카드 한 장. 선수 카드가 강화 등급의 색으로 물든다.
+   단일 테마(어두운 화면)로 의도했기 때문에 밝은 테마 블록은 두지 않는다. */
+:root {
+  --bg: #0b1020;
+  --card: #141b31;
+  --card-base: #10162a;
+  --line: rgba(255, 255, 255, 0.08);
+  --fg: #eaf0ff;
+  --muted: #8fa0c8;
+  --accent: #4f7cff;
+  --good: #34d399;
+  --bad: #f87171;
+  --tier: #8a94a8;
+  --g1: #1e2a4a;
+  --g2: #10162a;
+  --glow: none;
+  --font-body: "Noto Sans KR", system-ui, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --font-num: "Barlow Condensed", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  color: var(--fg);
+  font: 400 14px/1.5 var(--font-body);
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.app { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { margin: 0; font-size: 20px; font-weight: 700; text-wrap: balance; }
+h2 { margin: 4px 0 -4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+
+.ghost {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 10px; padding: 8px 12px; min-height: 40px;
+}
+kbd {
+  font: 700 11px/1 var(--font-body); padding: 3px 6px; border-radius: 6px;
+  background: rgba(255, 255, 255, 0.14); color: inherit;
+}
+
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+
+/* ---------- 선수 카드 ---------- */
+.hero {
+  border-radius: 22px; padding: 16px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--g1), var(--g2)); box-shadow: var(--glow);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.name { font-weight: 700; font-size: 16px; min-width: 0; overflow-wrap: anywhere; }
+.badge {
+  background: var(--tier); color: var(--card-base); border-radius: 999px; padding: 2px 16px;
+  font: 700 22px/1.3 var(--font-num); transition: background 0.25s;
+}
+.stage { display: grid; justify-items: center; gap: 4px; padding-block: 4px; }
+.fx { height: 24px; font-size: 20px; line-height: 24px; }
+.face {
+  width: 100px; height: 100px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 54px; line-height: 1; background: rgba(255, 255, 255, 0.1);
+  border: 3px solid var(--tier); transition: background 0.2s, border-color 0.25s;
+}
+.face[data-state="good"] { background: rgba(52, 211, 153, 0.35); }
+.face[data-state="bad"] { background: rgba(248, 113, 113, 0.35); }
+.ovr-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.ovr {
+  text-align: center; font: 700 56px/1 var(--font-num); font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 0; background: var(--tier); transition: width 0.25s, background 0.25s; }
+
+/* ---------- 현황 ---------- */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tile {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 6px; text-align: center; min-width: 0;
+}
+.tile b { display: block; font: 700 28px/1.1 var(--font-num); font-variant-numeric: tabular-nums; }
+.tile span { font-size: 11px; color: var(--muted); }
+.record { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
+
+/* ---------- 조작 ---------- */
+.protect {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px; cursor: pointer;
+}
+.protect strong { display: block; font-size: 14px; }
+.protect small { color: var(--muted); font-size: 11px; }
+.switch { position: relative; width: 48px; height: 28px; flex: none; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.switch i {
+  position: absolute; inset: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.18);
+  transition: background 0.15s; pointer-events: none;
+}
+.switch i::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+  border-radius: 50%; background: #fff; transition: transform 0.15s;
+}
+.switch input:checked + i { background: var(--accent); }
+.switch input:checked + i::after { transform: translateX(20px); }
+.switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.primary {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 58px; border: 0; border-radius: 14px; background: var(--accent); color: #fff;
+  font-size: 18px; font-weight: 700; transition: transform 0.08s, opacity 0.15s;
+}
+.primary:active:not(:disabled) { transform: scale(0.98); }
+.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+.actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.act {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  min-height: 56px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 12px;
+  background: transparent; transition: transform 0.08s, background 0.15s;
+}
+.act:active { transform: scale(0.97); background: rgba(255, 255, 255, 0.06); }
+.act b { font-size: 13px; font-weight: 700; }
+.act small { font-size: 10px; color: var(--muted); }
+
+.banner { border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 700; border: 1px solid; }
+.banner.good { color: var(--good); background: rgba(52, 211, 153, 0.12); border-color: rgba(52, 211, 153, 0.4); }
+.banner.bad { color: var(--bad); background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.4); }
+.banner.info { color: #9db6ff; background: rgba(79, 124, 255, 0.14); border-color: rgba(79, 124, 255, 0.45); }
+
+.log { list-style: none; margin: 0; padding: 12px 14px; max-height: 132px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.log .empty { color: var(--muted); }
+
+/* ---------- 접이식 구역 ---------- */
+details.panel { padding: 0; }
+details.panel > summary { list-style: none; cursor: pointer; padding: 14px; font-weight: 500; display: flex; justify-content: space-between; }
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::after { content: "＋"; color: var(--muted); }
+details.panel[open] > summary::after { content: "－"; }
+.inner { padding: 0 14px 14px; overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.tbl th { text-align: left; font-size: 12px; color: var(--muted); padding: 4px 8px; }
+.tbl td { padding: 6px 8px; }
+.tbl tr.now td { background: rgba(79, 124, 255, 0.25); }
+.tbl tr.now td:first-child { border-radius: 8px 0 0 8px; }
+.tbl tr.now td:last-child { border-radius: 0 8px 8px 0; }
+.sw { display: inline-block; width: 22px; height: 12px; border-radius: 4px; vertical-align: middle; }
+.keys { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.keys li { display: flex; align-items: center; gap: 10px; }
+.keys kbd { min-width: 44px; text-align: center; padding: 5px 6px; }
+.note { color: var(--muted); font-size: 11px; margin: 10px 0 0; }
+
+/* ---------- 설정 ---------- */
+.form { display: flex; flex-direction: column; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.field input {
+  min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05); padding: 8px 12px; font-size: 16px; color: var(--fg);
+}
+.btn-accent { min-height: 44px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; padding: 0 16px; }
+.btn-line { min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: transparent; padding: 0 16px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.msg { margin: 0; font-size: 13px; min-height: 1em; }
+.msg.good { color: var(--good); }
+.msg.bad { color: var(--bad); }
+.secret { align-self: flex-start; border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 8px 4px; }
+.vault { background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.35); border-radius: 12px; padding: 12px; }
+.vault h3 { margin: 0 0 8px; font-size: 14px; }
+.rates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<main class="app">
+  <header class="top">
+    <h1>선수 강화 시뮬레이터</h1>
+    <button class="ghost" id="btn-settings" type="button" aria-expanded="false" aria-controls="settings">설정 <kbd>S</kbd></button>
+  </header>
+
+  <section class="panel" id="settings" hidden>
+    <form class="form" id="settings-form" autocomplete="off">
+      <h2 style="margin:0">설정</h2>
+      <label class="field">선수 이름<input id="in-name" type="text" maxlength="20"></label>
+      <label class="field">기본 종합 능력치 (1~180)<input id="in-ovr" type="text" inputmode="numeric"></label>
+      <label class="field">초기 코인<input id="in-coins" type="text" inputmode="numeric"></label>
+      <label class="field">초기 보호권<input id="in-prot" type="text" inputmode="numeric"></label>
+      <div class="row"><button class="btn-accent" type="submit">설정 적용 (새로 시작)</button></div>
+      <p class="msg" id="settings-msg" role="status"></p>
+
+      <div class="vault" id="vault" hidden>
+        <h3>🔒 강화 확률 (나만 보기)</h3>
+        <div class="rates" id="rates"></div>
+        <div class="row">
+          <button class="btn-accent" type="button" id="rates-save">확률 저장</button>
+          <button class="btn-line" type="button" id="rates-reset">기본값</button>
+          <button class="btn-line" type="button" id="rates-hide">숨기기</button>
+        </div>
+        <p class="msg" id="rates-msg" role="status"></p>
+      </div>
+      <button class="secret" id="secret" type="button">v1.0</button>
+    </form>
+  </section>
+
+  <section class="hero" id="hero" aria-label="선수 카드">
+    <div class="hero-top">
+      <span class="name" id="name"></span>
+      <span class="badge" id="badge">+0</span>
+    </div>
+    <div class="stage">
+      <div class="fx" id="fx" aria-hidden="true"></div>
+      <div class="face" id="face" aria-hidden="true">🙂</div>
+    </div>
+    <div class="ovr-label"><span>종합 능력치</span><span>최대 180</span></div>
+    <div class="ovr" id="ovr">100</div>
+    <div class="bar" role="presentation"><i id="bar"></i></div>
+  </section>
+
+  <div class="tiles">
+    <div class="tile"><b id="t-coins">0</b><span>코인</span></div>
+    <div class="tile"><b id="t-prot">0</b><span>보호권</span></div>
+    <div class="tile"><b id="t-cost">0</b><span>강화 비용</span></div>
+  </div>
+  <p class="record" id="record"></p>
+
+  <label class="panel protect">
+    <span><strong>보호권 사용</strong><small>실패해도 단계를 지킵니다 <kbd>P</kbd></small></span>
+    <span class="switch"><input type="checkbox" id="protect" role="switch"><i></i></span>
+  </label>
+
+  <button class="primary" id="btn-enhance" type="button">강화하기 <kbd>E</kbd></button>
+  <div class="actions">
+    <button class="act" id="btn-reward" type="button"><b>경기 보상</b><small>코인 획득 · R</small></button>
+    <button class="act" id="btn-buy" type="button"><b>보호권 구매</b><small>500코인 · B</small></button>
+    <button class="act" id="btn-restart" type="button"><b>다시 시작</b><small>처음부터 · N</small></button>
+  </div>
+
+  <div class="banner" id="banner" role="status" aria-live="polite" hidden></div>
+
+  <h2>기록</h2>
+  <ol class="panel log" id="log" aria-label="강화 기록"></ol>
+
+  <details class="panel">
+    <summary>강화 정보 (비용 · 능력치 상승)</summary>
+    <div class="inner">
+      <table class="tbl">
+        <thead><tr><th>단계</th><th>비용</th><th>색</th><th>능력치 상승</th></tr></thead>
+        <tbody id="info-body"></tbody>
+      </table>
+    </div>
+  </details>
+
+  <details class="panel">
+    <summary>키보드 가이드 (PC)</summary>
+    <div class="inner">
+      <ul class="keys">
+        <li><kbd>E</kbd>강화하기</li>
+        <li><kbd>R</kbd>경기 보상 받기</li>
+        <li><kbd>B</kbd>보호권 구매</li>
+        <li><kbd>P</kbd>보호권 사용 켜기 / 끄기</li>
+        <li><kbd>N</kbd>다시 시작</li>
+        <li><kbd>S</kbd>설정 열기 / 닫기</li>
+        <li><kbd>Esc</kbd>설정 닫기</li>
+      </ul>
+      <p class="note">설정이 열려 있을 때는 글자 입력과 겹치지 않도록 Esc 외의 키가 꺼집니다. 한글 자판 상태에서도 같은 자리의 키로 동작합니다.</p>
+    </div>
+  </details>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ================= 게임 규칙 ================= */
+  const MAX_LEVEL = 13;
+  const DEFAULT_RATES = [0.95, 0.85, 0.75, 0.65, 0.55, 0.45, 0.35, 0.28, 0.20, 0.12, 0.08, 0.05, 0.03];
+  const BASE_COST = 100;
+  const PROTECTION_PRICE = 500;
+  const REWARD_RANGE = [150, 300];
+  // 0→1단계부터 차례로 오르는 종합 능력치 (12→13단계 값은 직전 값과 같게 3)
+  const LEVEL_INCREMENTS = [1, 1, 2, 2, 2, 3, 4, 2, 2, 2, 3, 3, 3];
+  const LEVEL_BONUS = [0];
+  LEVEL_INCREMENTS.reduce((sum, inc) => { sum += inc; LEVEL_BONUS.push(sum); return sum; }, 0);
+  const MAX_OVR = 180;
+  const DEFAULTS = { name: "나의 선수", baseOvr: 100, coins: 1000, protections: 2 };
+  const MAX_AMOUNT = 1000000;
+  const TIERS = [[1, 4, "동"], [5, 7, "은"], [8, 10, "금"], [11, 13, "다이아"]];
+  const TIER_COLORS = { "기본": "#8a94a8", "동": "#cd7f32", "은": "#c0c0c0", "금": "#ffd700", "다이아": "#6fe7ff" };
+  const FACE = { idle: "🙂", success: "😆", max: "🤩", fail: "😢", protectedFail: "😓" };
+
+  class GameError extends Error {}
+
+  const tierName = (level) => {
+    if (level <= 0) return "기본";
+    for (const [low, high, name] of TIERS) if (level >= low && level <= high) return name;
+    return TIERS[TIERS.length - 1][2];
+  };
+
+  const toInt = (raw) => {
+    const text = String(raw).trim();
+    if (!/^-?\d+$/.test(text)) return NaN;
+    return parseInt(text, 10);
+  };
+
+  function validateSettings(name, ovr, coins, prot) {
+    const cleanName = String(name).trim();
+    if (!cleanName) throw new GameError("선수 이름을 입력하세요.");
+    const baseOvr = toInt(ovr), startCoins = toInt(coins), startProt = toInt(prot);
+    if ([baseOvr, startCoins, startProt].some(Number.isNaN)) {
+      throw new GameError("능력치, 코인, 보호권은 숫자로 입력하세요.");
+    }
+    if (baseOvr < 1 || baseOvr > MAX_OVR) throw new GameError("기본 종합 능력치는 1~" + MAX_OVR + " 사이여야 합니다.");
+    if (startCoins < 0 || startProt < 0) throw new GameError("코인과 보호권은 0 이상이어야 합니다.");
+    if (startCoins > MAX_AMOUNT || startProt > MAX_AMOUNT) {
+      throw new GameError("코인과 보호권은 " + MAX_AMOUNT.toLocaleString("ko-KR") + " 이하로 입력하세요.");
+    }
+    return { name: cleanName, baseOvr, coins: startCoins, protections: startProt };
+  }
+
+  function validateRates(values) {
+    if (values.length !== MAX_LEVEL) throw new GameError("확률은 " + MAX_LEVEL + "개를 모두 입력해야 합니다.");
+    return values.map((raw, index) => {
+      const text = String(raw).trim().replace("%", "");
+      const percent = text === "" ? NaN : Number(text);
+      if (Number.isNaN(percent)) throw new GameError((index + 1) + "번째 확률이 숫자가 아닙니다.");
+      if (percent < 0 || percent > 100) throw new GameError((index + 1) + "번째 확률은 0~100 사이여야 합니다.");
+      return percent / 100;
+    });
+  }
+
+  let settings = { ...DEFAULTS };
+  let rates = DEFAULT_RATES.slice();
+  const newGame = () => ({
+    level: 0, coins: settings.coins, protections: settings.protections,
+    attempts: 0, bestLevel: 0, log: [],
+  });
+  let game = newGame();
+
+  const overall = () => Math.min(MAX_OVR, settings.baseOvr + LEVEL_BONUS[game.level]);
+  const enhanceCost = () => BASE_COST * (game.level + 1);
+
+  function enhance(useProtection) {
+    if (game.level >= MAX_LEVEL) throw new GameError("이미 최대 단계입니다.");
+    const cost = enhanceCost();
+    if (game.coins < cost) throw new GameError("코인이 부족합니다. (필요 " + cost + ", 보유 " + game.coins + ")");
+    if (useProtection && game.protections < 1) throw new GameError("보호권이 없습니다.");
+
+    const old = game.level;
+    const before = overall();
+    game.coins -= cost;
+    game.attempts += 1;
+
+    let result;
+    if (Math.random() < rates[old]) {
+      game.level = old + 1;
+      game.bestLevel = Math.max(game.bestLevel, game.level);
+      const gain = overall() - before;
+      result = { success: true, protectedFail: false, newLevel: game.level,
+        message: "강화 성공! +" + old + " → +" + game.level + " (종합 능력치 +" + gain + ")" };
+    } else if (useProtection) {
+      game.protections -= 1;
+      result = { success: false, protectedFail: true, newLevel: old,
+        message: "강화 실패... 보호권으로 +" + old + " 유지" };
+    } else {
+      game.level = Math.max(0, old - 1);
+      result = { success: false, protectedFail: false, newLevel: game.level,
+        message: "강화 실패... +" + old + " → +" + game.level };
+    }
+    game.log.push(result.message);
+    return result;
+  }
+
+  function earnCoins() {
+    const amount = REWARD_RANGE[0] + Math.floor(Math.random() * (REWARD_RANGE[1] - REWARD_RANGE[0] + 1));
+    game.coins += amount;
+    game.log.push("경기 보상 +" + amount + " 코인");
+    return amount;
+  }
+
+  function buyProtection() {
+    if (game.coins < PROTECTION_PRICE) {
+      throw new GameError("코인이 부족합니다. (필요 " + PROTECTION_PRICE + ", 보유 " + game.coins + ")");
+    }
+    game.coins -= PROTECTION_PRICE;
+    game.protections += 1;
+    game.log.push("보호권 구매 (-" + PROTECTION_PRICE + " 코인)");
+  }
+
+  /* ================= 저장 (이 브라우저에만) ================= */
+  const STORE_KEY = "soccer-sim-state-v1";
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ settings, rates, game })); } catch (e) { /* 저장 불가 환경 */ }
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      const st = validateSettings(s.settings.name, s.settings.baseOvr, s.settings.coins, s.settings.protections);
+      // 소수점 오차(7% → 7.000000000000001%)가 쌓이지 않도록 반올림해서 불러옵니다.
+      const r = validateRates(s.rates.map((x) => String(Math.round(x * 10000) / 100)));
+      const g = s.game;
+      const okInt = (v, max) => Number.isInteger(v) && v >= 0 && (max === undefined || v <= max);
+      if (!okInt(g.level, MAX_LEVEL) || !okInt(g.bestLevel, MAX_LEVEL) || !okInt(g.coins) ||
+          !okInt(g.protections) || !okInt(g.attempts) || !Array.isArray(g.log)) return;
+      settings = st;
+      rates = r;
+      game = { level: g.level, coins: g.coins, protections: g.protections, attempts: g.attempts,
+        bestLevel: g.bestLevel, log: g.log.filter((x) => typeof x === "string").slice(-60) };
+    } catch (e) { /* 저장된 값이 깨져 있으면 처음 상태로 시작 */ }
+  }
+
+  /* ================= 화면 ================= */
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    hero: $("hero"), name: $("name"), badge: $("badge"), face: $("face"), fx: $("fx"),
+    ovr: $("ovr"), bar: $("bar"), coins: $("t-coins"), prot: $("t-prot"), cost: $("t-cost"),
+    record: $("record"), protect: $("protect"), enhance: $("btn-enhance"), banner: $("banner"),
+    log: $("log"), info: $("info-body"), settings: $("settings"), btnSettings: $("btn-settings"),
+    form: $("settings-form"), inName: $("in-name"), inOvr: $("in-ovr"), inCoins: $("in-coins"),
+    inProt: $("in-prot"), sMsg: $("settings-msg"), vault: $("vault"), rates: $("rates"),
+    rMsg: $("rates-msg"),
+  };
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const hexToRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const blend = (a, b, t) => {
+    const x = hexToRgb(a), y = hexToRgb(b);
+    return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("");
+  };
+  const BASE = "#10162a";
+
+  function renderInfoTable() {
+    el.info.innerHTML = "";
+    for (let lvl = 0; lvl < MAX_LEVEL; lvl++) {
+      const tr = document.createElement("tr");
+      tr.dataset.level = String(lvl);
+      const gain = LEVEL_BONUS[lvl + 1] - LEVEL_BONUS[lvl];
+      const cells = [
+        "+" + lvl + " → +" + (lvl + 1),
+        String(BASE_COST * (lvl + 1)),
+        null,
+        "+" + gain + " (누적 +" + LEVEL_BONUS[lvl + 1] + ")",
+      ];
+      cells.forEach((text, i) => {
+        const td = document.createElement("td");
+        if (i === 2) {
+          const sw = document.createElement("span");
+          sw.className = "sw";
+          sw.style.background = TIER_COLORS[tierName(lvl + 1)];
+          td.appendChild(sw);
+        } else {
+          td.textContent = text;
+        }
+        tr.appendChild(td);
+      });
+      el.info.appendChild(tr);
+    }
+  }
+
+  function renderLog() {
+    el.log.innerHTML = "";
+    if (game.log.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "아직 기록이 없습니다. 강화하기를 눌러 보세요.";
+      el.log.appendChild(li);
+      return;
+    }
+    game.log.slice(-50).forEach((message) => {
+      const li = document.createElement("li");
+      li.textContent = message;
+      el.log.appendChild(li);
+    });
+    el.log.scrollTop = el.log.scrollHeight;
+  }
+
+  function render() {
+    const level = game.level;
+    const color = TIER_COLORS[tierName(level)];
+    const root = document.documentElement.style;
+    root.setProperty("--tier", color);
+    if (level > 0) {
+      root.setProperty("--g1", blend(color, BASE, 0.45));
+      root.setProperty("--g2", blend(color, BASE, 0.9));
+      const [r, g, b] = hexToRgb(color);
+      root.setProperty("--glow", "0 8px 28px rgba(" + r + "," + g + "," + b + ",0.35)");
+      el.hero.style.borderColor = color;
+    } else {
+      root.setProperty("--g1", "#1e2a4a");
+      root.setProperty("--g2", BASE);
+      root.setProperty("--glow", "none");
+      el.hero.style.borderColor = "";
+    }
+
+    el.name.textContent = settings.name;
+    el.badge.textContent = "+" + level;
+    el.ovr.textContent = String(overall());
+    el.bar.style.width = Math.min(100, (overall() / MAX_OVR) * 100) + "%";
+    el.coins.textContent = game.coins.toLocaleString("ko-KR");
+    el.prot.textContent = game.protections + "장";
+    el.cost.textContent = level >= MAX_LEVEL ? "MAX" : enhanceCost().toLocaleString("ko-KR");
+    el.record.textContent = "시도 " + game.attempts + "회  ·  최고 단계 +" + game.bestLevel;
+    el.enhance.disabled = level >= MAX_LEVEL;
+
+    el.info.querySelectorAll("tr").forEach((tr) => {
+      tr.classList.toggle("now", Number(tr.dataset.level) === level);
+    });
+    renderLog();
+  }
+
+  function showBanner(message, kind) {
+    el.banner.textContent = message;
+    el.banner.className = "banner " + kind;
+    el.banner.hidden = false;
+  }
+
+  /* ---------- 성공/실패 연출 ---------- */
+  let effectToken = 0;
+  // 진행 중인 얼굴 애니메이션을 멈춥니다. (오래된 브라우저에는 getAnimations가 없을 수 있음)
+  const cancelFaceAnimations = () => {
+    if (typeof el.face.getAnimations === "function") el.face.getAnimations().forEach((a) => a.cancel());
+  };
+  function playEffect(result) {
+    const token = ++effectToken;
+    cancelFaceAnimations();
+    if (result.success) {
+      el.face.textContent = result.newLevel >= MAX_LEVEL ? FACE.max : FACE.success;
+      el.face.dataset.state = "good";
+      el.fx.textContent = "✨ ✨ ✨";
+      if (!reduceMotion && typeof el.face.animate === "function") {
+        el.face.animate(
+          [{ transform: "scale(1)" }, { transform: "scale(1.3)" }, { transform: "scale(1)" }],
+          { duration: 320, easing: "ease-out" });
+      }
+    } else {
+      el.face.textContent = result.protectedFail ? FACE.protectedFail : FACE.fail;
+      el.face.dataset.state = "bad";
+      el.fx.textContent = "💧";
+      if (!reduceMotion && typeof el.face.animate === "function") {
+        el.face.animate(
+          [{ transform: "translateX(0)" }, { transform: "translateX(-9px)" }, { transform: "translateX(9px)" },
+           { transform: "translateX(-5px)" }, { transform: "translateX(5px)" }, { transform: "translateX(0)" }],
+          { duration: 280, easing: "ease-in-out" });
+      }
+    }
+    window.setTimeout(() => { if (token === effectToken) el.fx.textContent = ""; }, 650);
+  }
+
+  function resetFace() {
+    effectToken++;
+    cancelFaceAnimations();
+    el.face.textContent = FACE.idle;
+    el.face.dataset.state = "";
+    el.fx.textContent = "";
+  }
+
+  /* ---------- 동작 ---------- */
+  function run(action) {
+    try {
+      action();
+    } catch (error) {
+      if (error instanceof GameError) {
+        showBanner(error.message, "bad");
+      } else {
+        throw error;
+      }
+    }
+    render();
+    save();
+  }
+
+  function doEnhance() {
+    run(() => {
+      const result = enhance(el.protect.checked);
+      showBanner(result.message, result.success ? "good" : "bad");
+      playEffect(result);
+    });
+  }
+  function doReward() {
+    run(() => { showBanner("경기 보상으로 " + earnCoins() + " 코인을 받았습니다.", "info"); });
+  }
+  function doBuy() {
+    run(() => { buyProtection(); showBanner("보호권을 1장 구매했습니다.", "info"); });
+  }
+  function doRestart() {
+    game = newGame();
+    el.protect.checked = false;
+    el.banner.hidden = true;
+    resetFace();
+    render();
+    save();
+  }
+
+  /* ---------- 설정 / 숨김 메뉴 ---------- */
+  let settingsOpen = false;
+  let secretClicks = 0;
+
+  function toggleSettings(force) {
+    settingsOpen = typeof force === "boolean" ? force : !settingsOpen;
+    el.settings.hidden = !settingsOpen;
+    el.btnSettings.setAttribute("aria-expanded", String(settingsOpen));
+    if (settingsOpen) {
+      el.inName.value = settings.name;
+      el.inOvr.value = String(settings.baseOvr);
+      el.inCoins.value = String(settings.coins);
+      el.inProt.value = String(settings.protections);
+      el.sMsg.textContent = "";
+    } else {
+      el.vault.hidden = true;    // 설정을 닫으면 숨김 메뉴도 함께 닫힙니다.
+      secretClicks = 0;
+    }
+  }
+
+  function buildRateInputs() {
+    el.rates.innerHTML = "";
+    rates.forEach((rate, i) => {
+      const label = document.createElement("label");
+      label.className = "field";
+      label.textContent = "+" + i + " → +" + (i + 1) + " (%)";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "decimal";
+      input.value = String(Math.round(rate * 10000) / 100);
+      input.dataset.index = String(i);
+      label.appendChild(input);
+      el.rates.appendChild(label);
+    });
+  }
+
+  const setMsg = (node, text, kind) => { node.textContent = text; node.className = "msg " + kind; };
+
+  el.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    try {
+      settings = validateSettings(el.inName.value, el.inOvr.value, el.inCoins.value, el.inProt.value);
+      doRestart();
+      setMsg(el.sMsg, "적용됨: " + settings.name + " / 능력치 " + settings.baseOvr +
+        " / 코인 " + settings.coins + " / 보호권 " + settings.protections, "good");
+    } catch (error) {
+      if (!(error instanceof GameError)) throw error;
+      setMsg(el.sMsg, error.message, "bad");
+    }
+  });
+
+  $("secret").addEventListener("click", () => {
+    secretClicks += 1;
+    if (secretClicks >= 5) {
+      secretClicks = 0;
+      buildRateInputs();
+      el.rMsg.textContent = "";
+      el.vault.hidden = false;
+    }
+  });
+  $("rates-save").addEventListener("click", () => {
+    try {
+      rates = validateRates(Array.from(el.rates.querySelectorAll("input")).map((i) => i.value));
+      save();
+      setMsg(el.rMsg, "확률이 저장되었습니다. (지금 게임에도 적용됨)", "good");
+    } catch (error) {
+      if (!(error instanceof GameError)) throw error;
+      setMsg(el.rMsg, error.message, "bad");
+    }
+  });
+  $("rates-reset").addEventListener("click", () => {
+    rates = DEFAULT_RATES.slice();
+    buildRateInputs();
+    save();
+    setMsg(el.rMsg, "기본값으로 되돌렸습니다.", "good");
+  });
+  $("rates-hide").addEventListener("click", () => { el.vault.hidden = true; });
+
+  /* ---------- 버튼과 키보드 ---------- */
+  el.enhance.addEventListener("click", doEnhance);
+  $("btn-reward").addEventListener("click", doReward);
+  $("btn-buy").addEventListener("click", doBuy);
+  $("btn-restart").addEventListener("click", doRestart);
+  el.btnSettings.addEventListener("click", () => toggleSettings());
+
+  document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    // 설정이 열려 있으면 글자 입력과 겹치지 않도록 Esc(닫기)만 받습니다.
+    if (settingsOpen) {
+      if (event.key === "Escape") toggleSettings(false);
+      return;
+    }
+    if (event.repeat) return;   // 키를 꾹 누를 때의 연타 방지
+    // event.code는 자판 언어(한/영)와 상관없이 같은 자리의 키를 알려 줍니다.
+    switch (event.code) {
+      case "KeyE": doEnhance(); break;
+      case "KeyR": doReward(); break;
+      case "KeyB": doBuy(); break;
+      case "KeyP": el.protect.checked = !el.protect.checked; break;
+      case "KeyN": doRestart(); break;
+      case "KeyS": toggleSettings(); break;
+      default: return;
+    }
+    event.preventDefault();
+  });
+
+  /* ---------- 시작 ---------- */
+  load();
+  renderInfoTable();
+  render();
+})();
+</script>
