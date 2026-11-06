@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; base-uri 'none'; form-action 'none'">
+<title>21 맞추기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 컨셉: 어두운 방 한가운데의 초록 테이블. 칩 색과 카드의 붉은 무늬만 따뜻한 색.
+   다른 게임들과 같은 어두운 단일 테마로 의도했다. 칩은 게임 안의 가상 칩일 뿐이다. */
+:root {
+  --bg: #070b14;
+  --panel: #0f1626;
+  --panel-2: #141d33;
+  --line: rgba(140, 170, 255, 0.16);
+  --fg: #e6eeff;
+  --muted: #7f92b8;
+  --accent: #5ee1ff;
+  --gold: #ffc83d;
+  --bad: #ff7a7a;
+  --good: #5eecb0;
+  --felt-1: #14553f;
+  --felt-2: #0a2b25;
+  --card-ink: #1a2238;
+  --card-red: #d64545;
+  --cw: clamp(46px, 14vw, 62px);
+  --font-body: "Noto Sans KR", system-ui, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --font-num: "Chakra Petch", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background-color: var(--bg); }
+body {
+  color: var(--fg);
+  font: 400 14px/1.5 var(--font-body);
+  background-image: radial-gradient(1100px 520px at 50% -12%, #14224a 0%, rgba(7, 11, 20, 0) 70%);
+  background-repeat: no-repeat;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.app { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { margin: 0; font: 700 22px/1.2 var(--font-num); letter-spacing: 0.06em; }
+h1 small { display: block; font: 400 11px/1.4 var(--font-body); letter-spacing: 0; color: var(--muted); }
+.ghost { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 10px; padding: 8px 12px; min-height: 40px; }
+kbd { font: 700 11px/1 var(--font-body); padding: 3px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); color: inherit; }
+
+.hud { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; text-align: center; min-width: 0; }
+.stat b { display: block; font: 700 22px/1.2 var(--font-num); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat span { font-size: 11px; color: var(--muted); }
+.stat.chips b { color: var(--gold); }
+
+/* ---------- 테이블 ---------- */
+.table {
+  display: flex; flex-direction: column; gap: 12px; padding: 14px; min-height: 400px;
+  background: radial-gradient(120% 90% at 50% 0%, var(--felt-1), var(--felt-2) 80%);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 20px;
+}
+.seat-head { display: flex; align-items: baseline; gap: 10px; min-height: 22px; margin-bottom: 6px; }
+.who { font-size: 12px; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.7); }
+.val { font: 700 16px/1 var(--font-num); color: #fff; background: rgba(0, 0, 0, 0.35); padding: 3px 9px; border-radius: 999px; }
+.val.soft::after { content: " 소프트"; font: 500 10px/1 var(--font-body); opacity: 0.75; }
+.val.bust { background: rgba(255, 90, 90, 0.85); }
+.hand { display: flex; min-height: calc(var(--cw) * 1.42); }
+.hand .card + .card { margin-left: calc(var(--cw) * -0.34); }
+.hands { display: flex; flex-wrap: wrap; gap: 14px 18px; }
+.phand { padding: 8px; border-radius: 14px; border: 2px solid transparent; transition: border-color 0.15s, background 0.15s; }
+.phand.active { border-color: var(--gold); background: rgba(255, 200, 61, 0.08); }
+.tag { margin-top: 6px; font-size: 12px; font-weight: 700; min-height: 18px; }
+.tag.blackjack, .tag.win { color: var(--good); }
+.tag.lose, .tag.bust { color: var(--bad); }
+.tag.push { color: #cbd6f2; }
+.msg {
+  align-self: center; text-align: center; padding: 8px 16px; border-radius: 999px; font-weight: 700;
+  background: rgba(0, 0, 0, 0.35); max-width: 100%; text-wrap: balance;
+}
+.msg.good { color: var(--good); }
+.msg.bad { color: var(--bad); }
+
+/* ---------- 카드 ---------- */
+.card {
+  position: relative; width: var(--cw); height: calc(var(--cw) * 1.42); border-radius: 8px; background: #f4f6ff; color: var(--card-ink);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45); flex: none; user-select: none; -webkit-user-select: none;
+}
+.card.red { color: var(--card-red); }
+.card .corner { position: absolute; left: 6px; top: 4px; display: flex; flex-direction: column; align-items: center; font: 700 calc(var(--cw) * 0.3)/1 var(--font-num); }
+.card .corner i { font-style: normal; font-size: 0.85em; }
+.card .pip { position: absolute; inset: 0; display: grid; place-items: center; font-size: calc(var(--cw) * 0.62); padding-top: 14%; line-height: 1; }
+.card.back {
+  background: repeating-linear-gradient(45deg, #1d2b57 0 6px, #27396f 6px 12px); border: 3px solid #f4f6ff;
+}
+.card.in { animation: deal 0.28s ease-out backwards; }
+.card.flip { animation: flip 0.35s ease-out; }
+@keyframes deal { from { opacity: 0; transform: translateY(-20px) rotate(-6deg); } to { opacity: 1; transform: none; } }
+@keyframes flip { from { transform: rotateY(90deg); } to { transform: none; } }
+
+/* ---------- 조작 ---------- */
+.controls { display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center; }
+.chips { gap: 10px; }
+.chip {
+  width: 58px; height: 58px; border-radius: 50%; border: 3px dashed rgba(255, 255, 255, 0.75); font: 700 17px/1 var(--font-num);
+  color: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 4px rgba(0, 0, 0, 0.18); transition: transform 0.06s, opacity 0.15s;
+}
+.chip:active:not(:disabled) { transform: scale(0.94); }
+.chip:disabled { opacity: 0.35; cursor: not-allowed; }
+.chip.c10 { background: #5c6d99; } .chip.c50 { background: #c64a4a; } .chip.c100 { background: #2f6bd8; } .chip.c500 { background: #7a4fd6; }
+.btn {
+  min-height: 48px; padding: 0 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
+  font-weight: 700; font-size: 15px; transition: transform 0.06s;
+}
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.main { background: var(--accent); color: #05222b; border: 0; padding: 0 30px; min-width: 120px; }
+.btn.act { flex: 1 1 100px; }
+.btn kbd { margin-left: 6px; }
+.betline { text-align: center; color: var(--muted); font-size: 13px; }
+.betline b { color: var(--gold); font: 700 20px/1 var(--font-num); }
+
+details.guide { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+details.guide > summary { list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 500; display: flex; justify-content: space-between; }
+details.guide > summary::-webkit-details-marker { display: none; }
+details.guide > summary::after { content: "＋"; color: var(--muted); }
+details.guide[open] > summary::after { content: "－"; }
+.inner { padding: 0 14px 14px; }
+.rules { margin: 0 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 8px 0 0; padding: 0; list-style: none; }
+.keys li { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.keys kbd { min-width: 44px; text-align: center; padding: 5px 6px; }
+.note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card.in, .card.flip { animation: none; }
+  * { transition: none !important; }
+}
+.portal-back { align-self: flex-start; color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 0; min-height: 32px; }
+.portal-back:hover { color: var(--fg); }
+</style>
+
+<main class="app" id="app">
+  <a class="portal-back" href="../index.html">← 게임 메뉴</a>
+  <header class="top">
+    <h1>21 맞추기<small>카드 합을 21에 가깝게 만들어 딜러를 이기세요</small></h1>
+    <button class="ghost" id="btn-reset" type="button">처음부터</button>
+  </header>
+
+  <section class="hud" aria-label="현황">
+    <div class="stat chips"><b id="h-chips">0</b><span>보유 칩</span></div>
+    <div class="stat"><b id="h-bet">0</b><span>이번 베팅</span></div>
+    <div class="stat"><b id="h-best">0</b><span>최고 칩</span></div>
+  </section>
+
+  <section class="table" aria-label="게임 테이블">
+    <div>
+      <div class="seat-head"><span class="who">딜러</span><span class="val" id="d-val" hidden></span></div>
+      <div class="hand" id="d-hand"></div>
+    </div>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+    <div>
+      <div class="seat-head"><span class="who">나</span></div>
+      <div class="hands" id="p-hands"></div>
+    </div>
+  </section>
+
+  <section class="controls" aria-label="조작">
+    <div id="ctl-bet">
+      <div class="row chips" id="chip-row"></div>
+      <p class="betline">이번 베팅 <b id="bet-now">0</b> 칩</p>
+      <div class="row">
+        <button class="btn" id="b-clear" type="button">베팅 지우기</button>
+        <button class="btn" id="b-last" type="button">이전 금액</button>
+        <button class="btn main" id="b-deal" type="button">딜 <kbd>Enter</kbd></button>
+      </div>
+    </div>
+    <div class="row" id="ctl-play" hidden>
+      <button class="btn act" id="a-hit" type="button">히트<kbd>H</kbd></button>
+      <button class="btn act" id="a-stand" type="button">스탠드<kbd>S</kbd></button>
+      <button class="btn act" id="a-double" type="button">더블<kbd>D</kbd></button>
+      <button class="btn act" id="a-split" type="button">분할<kbd>P</kbd></button>
+    </div>
+    <div class="row" id="ctl-result" hidden>
+      <button class="btn" id="r-same" type="button">같은 금액으로 다시<kbd>R</kbd></button>
+      <button class="btn main" id="r-next" type="button">다음 판 <kbd>Enter</kbd></button>
+    </div>
+  </section>
+
+  <details class="guide">
+    <summary>규칙과 조작법</summary>
+    <div class="inner">
+      <ol class="rules">
+        <li>카드 점수: 2~10은 숫자 그대로, J·Q·K는 10점, A는 1점 또는 11점(유리한 쪽)입니다.</li>
+        <li>나와 딜러가 카드를 2장씩 받습니다. 딜러의 카드 한 장은 뒤집혀 있습니다.</li>
+        <li>합이 21을 넘으면 <b>버스트</b>로 바로 집니다.</li>
+        <li>처음 2장이 A와 10점 카드면 <b>블랙잭</b>입니다. 베팅의 1.5배를 받고, 딜러도 블랙잭이면 무승부입니다.</li>
+        <li><b>히트</b>는 카드 한 장 더, <b>스탠드</b>는 그만 받기입니다.</li>
+        <li><b>더블</b>은 처음 2장일 때 베팅을 두 배로 올리고 딱 한 장만 더 받습니다.</li>
+        <li><b>분할</b>은 같은 점수의 카드 2장을 두 패로 나눕니다. 한 번만 나눌 수 있고, 분할한 A는 한 장씩만 받습니다.</li>
+        <li>딜러는 합이 17 이상이 될 때까지 카드를 받고, A를 11로 센 17(소프트 17)에서도 멈춥니다.</li>
+        <li>이기면 베팅만큼 더 받고, 무승부면 베팅을 돌려받습니다.</li>
+      </ol>
+      <ul class="keys">
+        <li><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd>칩 10·50·100·500</li>
+        <li><kbd>Backspace</kbd>베팅 지우기</li>
+        <li><kbd>Enter</kbd>딜 / 다음 판</li>
+        <li><kbd>H</kbd><kbd>S</kbd><kbd>D</kbd><kbd>P</kbd>히트·스탠드·더블·분할</li>
+        <li><kbd>R</kbd>같은 금액으로 다시</li>
+      </ul>
+      <p class="note">보험과 항복은 없습니다. 칩은 게임 안의 가상 칩일 뿐이며 실제 돈과 관계가 없습니다. 칩이 10 미만이 되면 처음부터 다시 시작합니다.</p>
+    </div>
+  </details>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ================= 규칙 ================= */
+  const SUITS = ["♠", "♥", "♦", "♣"];
+  const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+  const DECKS = 6;
+  const RESHUFFLE_BELOW = 60;        // 남은 카드가 이보다 적으면 새로 섞는다
+  const MIN_BET = 10;
+  const START_CHIPS = 1000;
+  const CHIP_VALUES = [10, 50, 100, 500];
+  const DEALER_STANDS_ON = 17;       // 소프트 17에서도 멈춘다
+  const BLACKJACK_PAYS = 1.5;
+  const STORE_KEY = "twentyone-v1";
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let uid = 0;
+  const shuffle = (list) => {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list;
+  };
+  const makeShoe = () => {
+    const shoe = [];
+    for (let d = 0; d < DECKS; d++) for (const suit of SUITS) for (const rank of RANKS) shoe.push({ id: ++uid, rank, suit });
+    return shuffle(shoe);
+  };
+
+  const baseValue = (rank) => (rank === "A" ? 1 : ["10", "J", "Q", "K"].includes(rank) ? 10 : Number(rank));
+  function handInfo(cards) {
+    let total = 0, aces = 0;
+    for (const c of cards) { total += baseValue(c.rank); if (c.rank === "A") aces++; }
+    let soft = false;
+    if (aces > 0 && total + 10 <= 21) { total += 10; soft = true; }
+    return { total, soft };
+  }
+  const isBlackjack = (cards) => cards.length === 2 && handInfo(cards).total === 21;
+  const newHand = (cards, bet) => ({ cards, bet, done: false, doubled: false, fromSplit: false, result: null });
+
+  /* ================= 상태 ================= */
+  const S = {
+    chips: START_CHIPS, best: START_CHIPS, rounds: 0, wins: 0,
+    bet: 0, lastBet: 0, phase: "bet",          // bet, player, dealer, result
+    shoe: [], hands: [], active: 0, dealer: [], holeHidden: true,
+    message: "", messageKind: "", reshuffled: false, timer: null,
+  };
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ chips: S.chips, best: S.best, rounds: S.rounds, wins: S.wins })); } catch (e) { /* 저장 불가 환경 */ }
+  }
+  function load() {
+    try {
+      const v = JSON.parse(localStorage.getItem(STORE_KEY));
+      const ok = (n) => Number.isInteger(n) && n >= 0 && n <= 100000000;
+      if (!v || !ok(v.chips) || !ok(v.best) || !ok(v.rounds) || !ok(v.wins)) return;
+      S.chips = v.chips; S.best = Math.max(v.best, v.chips); S.rounds = v.rounds; S.wins = v.wins;
+      if (S.chips < MIN_BET) S.chips = START_CHIPS;     // 칩이 바닥난 채로 끝났다면 새로 시작
+    } catch (e) { /* 저장된 값이 없거나 읽을 수 없으면 처음 상태로 시작 */ }
+  }
+
+  /* ================= 진행 ================= */
+  const curHand = () => S.hands[S.active];
+  const tableBet = () => S.hands.reduce((sum, h) => sum + h.bet, 0);
+  function draw() {
+    if (S.shoe.length === 0) S.shoe = makeShoe();
+    return S.shoe.pop();
+  }
+
+  function addChip(value) {
+    if (S.phase !== "bet" || S.bet + value > S.chips) return;
+    S.bet += value;
+    render();
+  }
+  function clearBet() { if (S.phase === "bet") { S.bet = 0; render(); } }
+  function useLastBet() {
+    if (S.phase === "bet" && S.lastBet > 0 && S.lastBet <= S.chips) { S.bet = S.lastBet; render(); }
+  }
+
+  function deal() {
+    if (S.phase !== "bet" || S.bet < MIN_BET || S.bet > S.chips) return;
+    S.reshuffled = false;
+    if (S.shoe.length < RESHUFFLE_BELOW) { S.shoe = makeShoe(); S.reshuffled = true; }
+    S.chips -= S.bet;
+    S.lastBet = S.bet;
+    const p1 = draw(), d1 = draw(), p2 = draw(), d2 = draw();   // 나, 딜러, 나, 딜러 순서
+    S.hands = [newHand([p1, p2], S.bet)];
+    S.dealer = [d1, d2];
+    S.holeHidden = true;
+    S.active = 0;
+    S.phase = "player";
+    S.message = ""; S.messageKind = "";
+    if (isBlackjack(S.hands[0].cards) || isBlackjack(S.dealer)) { settle(); return; }
+    render();
+  }
+
+  const canDouble = () => S.phase === "player" && curHand().cards.length === 2 && S.chips >= curHand().bet;
+  const canSplit = () => {
+    if (S.phase !== "player" || S.hands.length !== 1) return false;
+    const h = curHand();
+    return h.cards.length === 2 && baseValue(h.cards[0].rank) === baseValue(h.cards[1].rank) && S.chips >= h.bet;
+  };
+
+  function hit() {
+    if (S.phase !== "player") return;
+    const h = curHand();
+    h.cards.push(draw());
+    if (handInfo(h.cards).total >= 21) finishHand(); else render();
+  }
+  function stand() { if (S.phase === "player") finishHand(); }
+  function doubleDown() {
+    if (!canDouble()) return;
+    const h = curHand();
+    S.chips -= h.bet;
+    h.bet *= 2;
+    h.doubled = true;
+    h.cards.push(draw());
+    finishHand();
+  }
+  function split() {
+    if (!canSplit()) return;
+    const h = curHand();
+    S.chips -= h.bet;
+    const [a, b] = h.cards;
+    const first = newHand([a, draw()], h.bet);
+    const second = newHand([b, draw()], h.bet);
+    first.fromSplit = second.fromSplit = true;
+    if (a.rank === "A") { first.done = true; second.done = true; }   // 분할한 A는 한 장씩만 받는다
+    S.hands = [first, second];
+    S.active = 0;
+    advance();
+  }
+
+  function finishHand() { curHand().done = true; advance(); }
+
+  // 아직 끝나지 않은 다음 패로 넘어가고, 모두 끝났으면 딜러 차례로 갑니다.
+  function advance() {
+    while (S.active < S.hands.length && S.hands[S.active].done) S.active++;
+    if (S.active >= S.hands.length) {
+      S.active = S.hands.length - 1;
+      dealerTurn();
+      return;
+    }
+    if (handInfo(curHand().cards).total >= 21) { curHand().done = true; advance(); return; }
+    render();
+  }
+
+  function dealerTurn() {
+    S.phase = "dealer";
+    S.holeHidden = false;
+    render();
+    const allBust = S.hands.every((h) => handInfo(h.cards).total > 21);
+    const pause = reduceMotion ? 120 : 650;
+    const step = () => {
+      if (!allBust && handInfo(S.dealer).total < DEALER_STANDS_ON) {
+        S.dealer.push(draw());
+        render();
+        S.timer = window.setTimeout(step, pause);
+      } else {
+        settle();
+      }
+    };
+    S.timer = window.setTimeout(step, pause);
+  }
+
+  const LABELS = { blackjack: "블랙잭", win: "승리", push: "무승부", lose: "패배", bust: "버스트" };
+
+  function settle() {
+    S.holeHidden = false;
+    const dealerTotal = handInfo(S.dealer).total;
+    const dealerBJ = isBlackjack(S.dealer);
+    let net = 0, won = 0;
+    S.hands.forEach((h) => {
+      const total = handInfo(h.cards).total;
+      const playerBJ = !h.fromSplit && isBlackjack(h.cards);
+      let result;
+      if (total > 21) result = "bust";
+      else if (playerBJ && dealerBJ) result = "push";
+      else if (playerBJ) result = "blackjack";
+      else if (dealerBJ) result = "lose";
+      else if (dealerTotal > 21 || total > dealerTotal) result = "win";
+      else if (total < dealerTotal) result = "lose";
+      else result = "push";
+      h.result = result;
+      if (result === "blackjack") { S.chips += h.bet + h.bet * BLACKJACK_PAYS; net += h.bet * BLACKJACK_PAYS; won++; }
+      else if (result === "win") { S.chips += h.bet * 2; net += h.bet; won++; }
+      else if (result === "push") { S.chips += h.bet; }
+      else { net -= h.bet; }
+    });
+    S.rounds += 1;
+    S.wins += won;
+    S.best = Math.max(S.best, S.chips);
+    S.phase = "result";
+    if (S.hands.length === 1) {
+      const r = S.hands[0].result;
+      S.message = r === "push" ? "무승부: 베팅을 돌려받습니다" : LABELS[r] + (net > 0 ? "! +" + net : " " + net) + " 칩";
+    } else {
+      S.message = "합계 " + (net > 0 ? "+" + net : String(net)) + " 칩";
+    }
+    S.messageKind = net > 0 ? "good" : net < 0 ? "bad" : "";
+    if (S.chips < MIN_BET) S.message += "  ·  칩이 모두 사라졌습니다";
+    save();
+    render();
+  }
+
+  function nextRound() {
+    if (S.phase !== "result") return;
+    if (S.chips < MIN_BET) { resetAll(); return; }
+    S.phase = "bet";
+    S.bet = 0;
+    S.hands = []; S.dealer = []; S.holeHidden = true;
+    S.message = ""; S.messageKind = "";
+    render();
+  }
+  function sameBetAgain() {
+    if (S.phase !== "result" || S.chips < MIN_BET || S.lastBet > S.chips) return;   // 칩이 모자라면 하지 않음
+    const wanted = S.lastBet;
+    nextRound();
+    S.bet = Math.min(wanted, S.chips);
+    deal();
+  }
+
+  function resetAll() {
+    window.clearTimeout(S.timer);
+    S.chips = START_CHIPS; S.rounds = 0; S.wins = 0;
+    S.bet = 0; S.lastBet = 0; S.phase = "bet";
+    S.hands = []; S.dealer = []; S.holeHidden = true;
+    S.message = ""; S.messageKind = "";
+    save();
+    render();
+  }
+
+  /* ================= 화면 ================= */
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    chips: $("h-chips"), bet: $("h-bet"), best: $("h-best"), dHand: $("d-hand"), dVal: $("d-val"),
+    pHands: $("p-hands"), msg: $("msg"), ctlBet: $("ctl-bet"), ctlPlay: $("ctl-play"), ctlResult: $("ctl-result"),
+    chipRow: $("chip-row"), betNow: $("bet-now"), bClear: $("b-clear"), bLast: $("b-last"), bDeal: $("b-deal"),
+    hit: $("a-hit"), stand: $("a-stand"), dbl: $("a-double"), split: $("a-split"), rSame: $("r-same"), rNext: $("r-next"),
+  };
+  const seen = new Set();          // 이미 그려서 애니메이션을 보여 준 카드
+  const flipped = new Set();       // 뒤집힘 연출을 보여 준 딜러의 두 번째 카드
+
+  function makeNode(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function cardNode(card, faceDown, isHole) {
+    const red = card.suit === "♥" || card.suit === "♦";
+    const node = makeNode("div", "card" + (faceDown ? " back" : red ? " red" : ""));
+    if (!faceDown) {
+      const corner = makeNode("div", "corner");
+      corner.append(makeNode("span", "", card.rank), makeNode("i", "", card.suit));
+      node.append(corner, makeNode("div", "pip", card.suit));
+      node.setAttribute("aria-label", card.suit + " " + card.rank);
+    } else {
+      node.setAttribute("aria-label", "뒤집힌 카드");
+    }
+    if (!seen.has(card.id)) { seen.add(card.id); if (!reduceMotion) node.classList.add("in"); }
+    if (isHole && !faceDown && !flipped.has(card.id)) { flipped.add(card.id); if (!reduceMotion) node.classList.add("flip"); }
+    return node;
+  }
+
+  // dealerHand가 true일 때만 두 번째 카드(뒤집혀 있던 카드)에 뒤집힘 연출을 줍니다.
+  function fillHand(container, cards, hideIndex, dealerHand) {
+    container.textContent = "";
+    cards.forEach((card, i) => container.appendChild(cardNode(card, i === hideIndex, dealerHand && i === 1)));
+  }
+
+  function setValue(node, cards, hiddenSecond) {
+    if (cards.length === 0) { node.hidden = true; return; }
+    node.hidden = false;
+    node.className = "val";
+    if (hiddenSecond) { node.textContent = String(handInfo([cards[0]]).total) + " + ?"; return; }
+    const info = handInfo(cards);
+    node.textContent = String(info.total);
+    if (info.total > 21) node.classList.add("bust");
+    else if (info.soft && info.total < 21) node.classList.add("soft");
+  }
+
+  function render() {
+    el.chips.textContent = S.chips.toLocaleString("ko-KR");
+    el.best.textContent = S.best.toLocaleString("ko-KR");
+    const onTable = S.phase === "bet" ? S.bet : tableBet();
+    el.bet.textContent = onTable.toLocaleString("ko-KR");
+    el.betNow.textContent = S.bet.toLocaleString("ko-KR");
+
+    // 딜러
+    fillHand(el.dHand, S.dealer, S.holeHidden ? 1 : -1, true);
+    setValue(el.dVal, S.dealer, S.holeHidden);
+
+    // 내 패
+    el.pHands.textContent = "";
+    S.hands.forEach((h, i) => {
+      const box = makeNode("div", "phand" + (S.phase === "player" && i === S.active ? " active" : ""));
+      const head = makeNode("div", "seat-head");
+      head.appendChild(makeNode("span", "who", S.hands.length > 1 ? "패 " + (i + 1) : "내 패"));
+      const val = makeNode("span", "val");
+      setValue(val, h.cards, false);
+      head.appendChild(val);
+      const hand = makeNode("div", "hand");
+      fillHand(hand, h.cards, -1, false);
+      box.append(head, hand);
+      const tag = makeNode("div", "tag" + (h.result ? " " + h.result : ""), h.result ? LABELS[h.result] : h.doubled ? "더블" : "");
+      box.appendChild(tag);
+      el.pHands.appendChild(box);
+    });
+
+    // 안내 문구
+    let text = S.message, kind = S.messageKind;
+    if (S.phase === "bet") {
+      text = S.chips < MIN_BET ? "칩이 부족합니다. 처음부터 다시 시작하세요." : "칩을 눌러 베팅하고 딜을 누르세요.";
+    } else if (S.phase === "player") {
+      text = (S.reshuffled ? "카드를 새로 섞었습니다. " : "") + (S.hands.length > 1 ? "패 " + (S.active + 1) + " 차례입니다." : "내 차례입니다.");
+    } else if (S.phase === "dealer") {
+      text = "딜러가 카드를 받는 중입니다...";
+    }
+    el.msg.textContent = text;
+    el.msg.className = "msg" + (kind ? " " + kind : "");
+
+    // 조작 버튼
+    el.ctlBet.hidden = S.phase !== "bet";
+    el.ctlPlay.hidden = S.phase !== "player" && S.phase !== "dealer";
+    el.ctlResult.hidden = S.phase !== "result";
+    el.chipRow.querySelectorAll("button").forEach((b) => { b.disabled = S.bet + Number(b.dataset.v) > S.chips; });
+    el.bClear.disabled = S.bet === 0;
+    el.bLast.disabled = !(S.lastBet > 0 && S.lastBet <= S.chips) || S.bet === S.lastBet;
+    el.bDeal.disabled = S.bet < MIN_BET || S.bet > S.chips;
+    const myTurn = S.phase === "player";
+    el.hit.disabled = !myTurn;
+    el.stand.disabled = !myTurn;
+    el.dbl.disabled = !myTurn || !canDouble();
+    el.split.disabled = !myTurn || !canSplit();
+    const broke = S.chips < MIN_BET;
+    el.rNext.textContent = broke ? "처음부터 다시 시작" : "다음 판 ";
+    if (!broke) el.rNext.append(makeNode("kbd", "", "Enter"));
+    el.rSame.hidden = broke || S.lastBet > S.chips;
+  }
+
+  /* ================= 입력 ================= */
+  CHIP_VALUES.forEach((value) => {
+    const b = makeNode("button", "chip c" + value, String(value));
+    b.type = "button";
+    b.dataset.v = String(value);
+    b.setAttribute("aria-label", "칩 " + value + " 올리기");
+    b.addEventListener("click", () => addChip(value));
+    el.chipRow.appendChild(b);
+  });
+  el.bClear.addEventListener("click", clearBet);
+  el.bLast.addEventListener("click", useLastBet);
+  el.bDeal.addEventListener("click", deal);
+  el.hit.addEventListener("click", hit);
+  el.stand.addEventListener("click", stand);
+  el.dbl.addEventListener("click", doubleDown);
+  el.split.addEventListener("click", split);
+  el.rNext.addEventListener("click", nextRound);
+  el.rSame.addEventListener("click", sameBetAgain);
+  $("btn-reset").addEventListener("click", resetAll);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.altKey || event.metaKey || event.repeat) return;
+    const onButton = event.target && event.target.closest && event.target.closest("button, summary");
+    const code = event.code;
+    const enter = code === "Enter" || code === "NumpadEnter";
+
+    if (S.phase === "bet") {
+      const digit = ["Digit1", "Digit2", "Digit3", "Digit4"].indexOf(code);
+      const numpad = ["Numpad1", "Numpad2", "Numpad3", "Numpad4"].indexOf(code);
+      const idx = digit >= 0 ? digit : numpad;
+      if (idx >= 0) { event.preventDefault(); addChip(CHIP_VALUES[idx]); }
+      else if (code === "Backspace" || code === "Delete") { event.preventDefault(); clearBet(); }
+      else if (enter && !onButton) { event.preventDefault(); deal(); }
+    } else if (S.phase === "player") {
+      if (code === "KeyH") { event.preventDefault(); hit(); }
+      else if (code === "KeyS") { event.preventDefault(); stand(); }
+      else if (code === "KeyD") { event.preventDefault(); doubleDown(); }
+      else if (code === "KeyP") { event.preventDefault(); split(); }
+    } else if (S.phase === "result") {
+      if (enter && !onButton) { event.preventDefault(); nextRound(); }
+      else if (code === "KeyR") { event.preventDefault(); sameBetAgain(); }
+    }
+  });
+
+  /* ================= 시작 ================= */
+  load();
+  S.shoe = makeShoe();
+  render();
+})();
+</script>

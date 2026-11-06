@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; base-uri 'none'; form-action 'none'">
+<title>폭탄 찾기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 컨셉: 우주 정거장의 구역 지도. 닫힌 구역은 금속 패널, 열린 구역은 어두운 공간에 색이 다른 숫자.
+   경보 표시는 황금빛 신호등 하나만 따뜻한 색. 어두운 단일 테마로 의도했다. */
+:root {
+  --bg: #070b14;
+  --panel: #0f1626;
+  --panel-2: #141d33;
+  --line: rgba(140, 170, 255, 0.16);
+  --fg: #e6eeff;
+  --muted: #7f92b8;
+  --accent: #5ee1ff;
+  --gold: #ffc83d;
+  --bad: #ff7a7a;
+  --good: #5eecb0;
+  --cell: 30px;
+  --font-body: "Noto Sans KR", system-ui, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --font-num: "Chakra Petch", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background-color: var(--bg); }
+body {
+  color: var(--fg);
+  font: 400 14px/1.5 var(--font-body);
+  background-image: radial-gradient(1100px 520px at 50% -12%, #14224a 0%, rgba(7, 11, 20, 0) 70%);
+  background-repeat: no-repeat;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.app { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { margin: 0; font: 700 22px/1.2 var(--font-num); letter-spacing: 0.06em; }
+h1 small { display: block; font: 400 11px/1.4 var(--font-body); letter-spacing: 0; color: var(--muted); }
+.ghost { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 10px; padding: 8px 12px; min-height: 40px; }
+kbd { font: 700 11px/1 var(--font-body); padding: 3px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); color: inherit; }
+
+.hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 4px; text-align: center; min-width: 0; }
+.stat b { display: block; font: 700 20px/1.2 var(--font-num); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); }
+.stat.warn b { color: var(--gold); }
+
+/* ---------- 구역 지도 ---------- */
+.mapwrap { overflow-x: auto; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; display: grid; justify-content: center; }
+.board {
+  display: grid; gap: 2px; width: max-content;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
+}
+.cell {
+  position: relative; width: var(--cell); height: var(--cell); padding: 0; border: 0; border-radius: 4px;
+  font: 700 calc(var(--cell) * 0.58)/1 var(--font-num); display: grid; place-items: center;
+  background: linear-gradient(145deg, #2a3c68, #19244a); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.16), inset -1px -1px 0 rgba(0, 0, 0, 0.35);
+  color: var(--fg);
+}
+.cell:hover:not(.open) { background: linear-gradient(145deg, #34497d, #1e2b56); }
+.cell.open { background: #0a1121; box-shadow: inset 0 0 0 1px rgba(140, 170, 255, 0.07); cursor: default; }
+.cell.n1 { color: #5ee1ff; } .cell.n2 { color: #7ee0a5; } .cell.n3 { color: #ffc83d; } .cell.n4 { color: #ff8a7a; }
+.cell.n5 { color: #f29bc4; } .cell.n6 { color: #9b8cff; } .cell.n7 { color: #b9c3d9; } .cell.n8 { color: #ffffff; }
+/* 경보 표시: 황금 신호등 */
+.cell.flag::after {
+  content: ""; width: 38%; height: 38%; background: var(--gold); transform: rotate(45deg); border-radius: 2px;
+  box-shadow: 0 0 10px rgba(255, 200, 61, 0.8);
+}
+/* 운석: 갈색 바위 */
+.cell.hazard { background: #2a1119; }
+.cell.hazard::after {
+  content: ""; width: 58%; height: 58%; border-radius: 46% 54% 50% 50%;
+  background: radial-gradient(circle at 35% 30%, #c9946a, #6e4630 70%);
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.35);
+}
+.cell.boom { background: #6b1f2b; box-shadow: 0 0 14px rgba(255, 90, 90, 0.7); }
+.cell.wrong::before {
+  content: ""; position: absolute; left: 12%; right: 12%; top: 50%; height: 2px; background: var(--bad);
+  transform: rotate(-45deg); z-index: 1;
+}
+.cell.scan { box-shadow: inset 0 0 0 2px rgba(94, 225, 255, 0.85); }
+.cell.cursor { outline: 2px solid #fff; outline-offset: -2px; }
+
+/* ---------- 조작 ---------- */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.seg button {
+  min-height: 46px; padding: 0 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
+  color: var(--muted); font-weight: 500; font-size: 14px;
+}
+.seg button[aria-pressed="true"] { background: rgba(94, 225, 255, 0.16); border-color: rgba(94, 225, 255, 0.55); color: var(--accent); font-weight: 700; }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+.lbl { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; margin-bottom: -6px; }
+
+.banner { border: 1px solid rgba(94, 225, 255, 0.45); background: rgba(94, 225, 255, 0.12); color: #9eeeff; border-radius: 12px; padding: 10px 14px; font-weight: 700; }
+.result { text-align: center; border-radius: 16px; padding: 16px; border: 1px solid var(--line); background: var(--panel); }
+.result h2 { margin: 0 0 4px; font: 700 24px/1.2 var(--font-num); letter-spacing: 0.06em; }
+.result.win h2 { color: var(--good); }
+.result.lose h2 { color: var(--bad); }
+.result p { margin: 0 0 12px; color: var(--muted); }
+.btn-main { min-height: 48px; padding: 0 28px; border: 0; border-radius: 12px; background: var(--accent); color: #05222b; font-weight: 700; font-size: 16px; }
+
+details.guide { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+details.guide > summary { list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 500; display: flex; justify-content: space-between; }
+details.guide > summary::-webkit-details-marker { display: none; }
+details.guide > summary::after { content: "＋"; color: var(--muted); }
+details.guide[open] > summary::after { content: "－"; }
+.inner { padding: 0 14px 14px; }
+.keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0 0 8px; padding: 0; list-style: none; }
+.keys li { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.keys kbd { min-width: 44px; text-align: center; padding: 5px 6px; }
+.note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.portal-back { align-self: flex-start; color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 0; min-height: 32px; }
+.portal-back:hover { color: var(--fg); }
+</style>
+
+<main class="app" id="app">
+  <a class="portal-back" href="../index.html">← 게임 메뉴</a>
+  <header class="top">
+    <h1>폭탄 찾기<small>숨은 운석을 피해 안전한 구역을 모두 여세요</small></h1>
+    <button class="ghost" id="btn-new" type="button">새 게임 <kbd>R</kbd></button>
+  </header>
+
+  <section class="hud" aria-label="현황">
+    <div class="stat warn"><b id="h-remain">0</b><span>남은 운석</span></div>
+    <div class="stat"><b id="h-time">0:00</b><span>시간</span></div>
+    <div class="stat"><b id="h-scans">3</b><span>스캔</span></div>
+    <div class="stat"><b id="h-best">-</b><span id="h-best-label">최단 기록</span></div>
+  </section>
+
+  <div class="mapwrap" id="mapwrap">
+    <div class="board" id="board" role="grid" aria-label="정찰 구역"></div>
+  </div>
+
+  <div class="banner" id="banner" role="status" aria-live="polite" hidden></div>
+
+  <div class="result" id="result" role="status" hidden>
+    <h2 id="res-title"></h2>
+    <p id="res-body"></p>
+    <button class="btn-main" id="btn-again" type="button">다시 도전</button>
+  </div>
+
+  <span class="lbl">누르면 하는 일</span>
+  <div class="seg" id="modes" role="group" aria-label="조작 방식">
+    <button type="button" data-mode="open" aria-pressed="true">열기</button>
+    <button type="button" data-mode="flag" aria-pressed="false">경보</button>
+    <button type="button" data-mode="scan" aria-pressed="false" id="mode-scan">스캔 (3)</button>
+  </div>
+
+  <span class="lbl">난이도</span>
+  <div class="seg" id="diffs" role="group" aria-label="난이도">
+    <button type="button" data-diff="easy" aria-pressed="true">쉬움</button>
+    <button type="button" data-diff="normal" aria-pressed="false">보통</button>
+    <button type="button" data-diff="hard" aria-pressed="false">어려움</button>
+  </div>
+
+  <details class="guide">
+    <summary>조작법과 규칙</summary>
+    <div class="inner">
+      <ul class="keys">
+        <li><kbd>클릭</kbd>구역 열기</li>
+        <li><kbd>우클릭</kbd>경보 표시</li>
+        <li><kbd>길게 누르기</kbd>경보 표시 (폰)</li>
+        <li><kbd>숫자 칸</kbd>주변 경보가 맞으면 한 번에 열기</li>
+        <li><kbd>방향키</kbd>칸 이동</li>
+        <li><kbd>Enter</kbd><kbd>Space</kbd>열기</li>
+        <li><kbd>F</kbd>경보 표시</li>
+        <li><kbd>S</kbd>스캔</li>
+        <li><kbd>R</kbd>새 게임</li>
+      </ul>
+      <p class="note">열린 칸의 숫자는 주변 8칸에 숨은 운석의 수입니다. 첫 번째로 연 칸과 그 주변은 항상 안전합니다.</p>
+      <p class="note"><b>스캔(게임당 3회):</b> 고른 칸을 중심으로 5×5 범위에 운석이 몇 개 있는지 알려 줍니다. 첫 칸을 연 뒤부터 쓸 수 있습니다.</p>
+      <p class="note">안전한 칸을 모두 열면 성공이고, 가장 빠른 기록은 난이도별로 이 브라우저에 저장됩니다.</p>
+    </div>
+  </details>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ================= 규칙 ================= */
+  const LEVELS = {
+    easy: { label: "쉬움", cols: 8, rows: 8, hazards: 9 },
+    normal: { label: "보통", cols: 12, rows: 12, hazards: 24 },
+    hard: { label: "어려움", cols: 16, rows: 14, hazards: 45 },
+  };
+  const SCANS = 3;
+  const SCAN_RADIUS = 2;            // 5×5 범위
+  const LONG_PRESS_MS = 450;
+
+  /* ================= 저장 (이 브라우저에만) ================= */
+  const STORE_KEY = "asteroid-recon-v1";
+  let saved = { difficulty: "easy", best: { easy: null, normal: null, hard: null } };
+  function loadSaved() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (s && LEVELS[s.difficulty]) saved.difficulty = s.difficulty;
+      if (s && s.best) {
+        for (const key of Object.keys(LEVELS)) {
+          const v = s.best[key];
+          if (Number.isInteger(v) && v > 0) saved.best[key] = v;
+        }
+      }
+    } catch (e) { /* 저장된 값이 없거나 읽을 수 없으면 기본값 */ }
+  }
+  function persist() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch (e) { /* 저장 불가 환경 */ }
+  }
+
+  /* ================= 상태 ================= */
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    app: $("app"), board: $("board"), remain: $("h-remain"), time: $("h-time"), scans: $("h-scans"),
+    best: $("h-best"), bestLabel: $("h-best-label"), banner: $("banner"), result: $("result"),
+    resTitle: $("res-title"), resBody: $("res-body"), modes: $("modes"), diffs: $("diffs"), modeScan: $("mode-scan"),
+  };
+  let cfg, cols, rows, total;
+  let hazard, count, opened, flagged, cells;
+  let status = "ready";               // ready, playing, won, lost
+  let mode = "open";                  // open, flag, scan
+  let cursor = 0, scansLeft = SCANS, flagsCount = 0, openCount = 0;
+  let startAt = 0, pausedAt = 0, finalMs = 0, timerId = null;
+  let longTimer = null, longPressed = false;
+
+  const rand = (n) => Math.floor(Math.random() * n);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  function around(i, radius, includeSelf) {
+    const x = i % cols, y = Math.floor(i / cols), out = [];
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (!includeSelf && dx === 0 && dy === 0) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) out.push(ny * cols + nx);
+      }
+    }
+    return out;
+  }
+
+  const formatTime = (ms) => {
+    const s = Math.floor(ms / 1000);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
+  const elapsedMs = () => (status === "playing" ? performance.now() - startAt : finalMs);
+
+  /* ================= 게임 진행 ================= */
+  function newGame() {
+    cfg = LEVELS[saved.difficulty];
+    cols = cfg.cols; rows = cfg.rows; total = cols * rows;
+    hazard = new Array(total).fill(false);
+    count = new Array(total).fill(0);
+    opened = new Array(total).fill(false);
+    flagged = new Array(total).fill(false);
+    status = "ready"; scansLeft = SCANS; flagsCount = 0; openCount = 0;
+    cursor = Math.floor(total / 2);
+    stopTimer(); startAt = 0; finalMs = 0;
+    el.result.hidden = true;
+    el.banner.hidden = true;
+    buildBoard();
+    layout();
+    setMode("open");
+    el.diffs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.diff === saved.difficulty)));
+    hud();
+  }
+
+  function placeHazards(safeIndex) {
+    // 처음 연 칸과 그 주변 8칸에는 운석을 두지 않습니다.
+    const forbidden = new Set(around(safeIndex, 1, true));
+    const pool = [];
+    for (let i = 0; i < total; i++) if (!forbidden.has(i)) pool.push(i);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = rand(i + 1);
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    pool.slice(0, cfg.hazards).forEach((i) => { hazard[i] = true; });
+    for (let i = 0; i < total; i++) {
+      count[i] = around(i, 1, false).filter((n) => hazard[n]).length;
+    }
+  }
+
+  function reveal(i) {
+    if (opened[i] || flagged[i]) return;
+    if (status === "ready") {
+      placeHazards(i);
+      status = "playing";
+      startAt = performance.now();
+      timerId = window.setInterval(hud, 200);
+    }
+    if (hazard[i]) { lose(i); return; }
+    const stack = [i];
+    while (stack.length) {
+      const j = stack.pop();
+      if (opened[j] || flagged[j]) continue;
+      opened[j] = true;
+      openCount++;
+      paint(j);
+      if (count[j] === 0) around(j, 1, false).forEach((n) => { if (!opened[n] && !flagged[n]) stack.push(n); });
+    }
+    hud();
+    if (openCount === total - cfg.hazards) win();
+  }
+
+  function chord(i) {
+    if (!opened[i] || count[i] === 0) return;
+    const neighbors = around(i, 1, false);
+    if (neighbors.filter((n) => flagged[n]).length !== count[i]) return;
+    for (const n of neighbors) {
+      if (!opened[n] && !flagged[n]) {
+        reveal(n);
+        if (status === "lost") return;
+      }
+    }
+  }
+
+  function toggleFlag(i) {
+    if (status === "won" || status === "lost" || opened[i]) return;
+    flagged[i] = !flagged[i];
+    flagsCount += flagged[i] ? 1 : -1;
+    paint(i);
+    hud();
+  }
+
+  function scan(i) {
+    if (status === "won" || status === "lost") return;
+    if (status === "ready") { showBanner("먼저 한 칸을 열어 정찰을 시작하세요."); return; }
+    if (scansLeft <= 0) { showBanner("스캔을 모두 사용했습니다."); return; }
+    scansLeft--;
+    const area = around(i, SCAN_RADIUS, true);
+    const found = area.filter((n) => hazard[n]).length;
+    area.forEach((n) => cells[n].classList.add("scan"));
+    window.setTimeout(() => area.forEach((n) => cells[n] && cells[n].classList.remove("scan")), 2400);
+    showBanner("스캔 결과: 5×5 범위에 운석이 " + found + "개 있습니다.");
+    hud();
+  }
+
+  function stopTimer() { if (timerId !== null) { window.clearInterval(timerId); timerId = null; } }
+
+  function lose(boomIndex) {
+    finalMs = performance.now() - startAt;
+    status = "lost";
+    stopTimer();
+    for (let i = 0; i < total; i++) {
+      if (hazard[i] && !flagged[i]) paint(i, true);
+      else if (flagged[i] && !hazard[i]) paint(i, false, true);
+    }
+    cells[boomIndex].classList.add("boom");
+    showResult("lose", "운석 충돌", "열어 둔 구역 " + openCount + " / " + (total - cfg.hazards) + "  ·  " + formatTime(finalMs));
+    hud();
+  }
+
+  function win() {
+    finalMs = performance.now() - startAt;
+    status = "won";
+    stopTimer();
+    for (let i = 0; i < total; i++) if (hazard[i] && !flagged[i]) { flagged[i] = true; flagsCount++; paint(i); }
+    const prev = saved.best[saved.difficulty];
+    const ms = Math.max(1, Math.round(finalMs));
+    const isRecord = prev === null || ms < prev;
+    if (isRecord) { saved.best[saved.difficulty] = ms; persist(); }
+    showResult("win", "정찰 성공", cfg.label + "  ·  " + formatTime(finalMs) + "  ·  스캔 " + (SCANS - scansLeft) + "회 사용" + (isRecord ? "  ·  최단 기록!" : ""));
+    hud();
+  }
+
+  /* ================= 화면 ================= */
+  function buildBoard() {
+    el.board.innerHTML = "";
+    el.board.style.gridTemplateColumns = "repeat(" + cols + ", var(--cell))";
+    cells = [];
+    for (let i = 0; i < total; i++) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "cell";
+      b.dataset.i = String(i);
+      b.tabIndex = -1;                 // 키보드는 방향키 커서로 조작합니다.
+      b.setAttribute("role", "gridcell");
+      cells.push(b);
+      el.board.appendChild(b);
+    }
+    for (let i = 0; i < total; i++) paint(i);
+  }
+
+  function layout() {
+    const room = Math.max(160, el.app.clientWidth - 24);
+    const size = clamp(Math.floor((room - (cols - 1) * 2) / cols), 18, 40);
+    document.documentElement.style.setProperty("--cell", size + "px");
+  }
+
+  function paint(i, showHazard, markWrong) {
+    const c = cells[i];
+    const row = Math.floor(i / cols) + 1, col = (i % cols) + 1;
+    let cls = "cell", text = "", label = row + "행 " + col + "열 ";
+    if (opened[i]) {
+      cls += " open";
+      if (count[i] > 0) { cls += " n" + count[i]; text = String(count[i]); label += "열림, 주변 운석 " + count[i] + "개"; }
+      else label += "열림, 주변 운석 없음";
+    } else if (showHazard) {
+      cls += " hazard"; label += "운석";
+    } else if (flagged[i]) {
+      cls += " flag"; label += "경보 표시";
+      if (markWrong) { cls += " wrong"; label += ", 잘못된 표시"; }
+    } else {
+      label += "닫힘";
+    }
+    if (i === cursor && status !== "won" && status !== "lost") cls += " cursor";
+    c.className = cls;
+    c.textContent = text;
+    c.setAttribute("aria-label", label);
+  }
+
+  function moveCursor(next) {
+    const old = cursor;
+    cursor = next;
+    paint(old);
+    paint(cursor);
+  }
+
+  function hud() {
+    el.remain.textContent = String(cfg.hazards - flagsCount);
+    el.time.textContent = formatTime(status === "ready" ? 0 : elapsedMs());
+    el.scans.textContent = String(scansLeft);
+    el.modeScan.textContent = "스캔 (" + scansLeft + ")";
+    const best = saved.best[saved.difficulty];
+    el.bestLabel.textContent = "최단 기록 · " + cfg.label;
+    el.best.textContent = best === null ? "-" : formatTime(best);
+  }
+
+  function showBanner(text) { el.banner.textContent = text; el.banner.hidden = false; }
+  function showResult(kind, title, body) {
+    el.result.className = "result " + kind;
+    el.resTitle.textContent = title;
+    el.resBody.textContent = body;
+    el.result.hidden = false;
+    el.banner.hidden = true;
+  }
+
+  function setMode(next) {
+    mode = next;
+    el.modes.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+  }
+
+  /* ================= 입력 ================= */
+  function act(i) {
+    if (status === "won" || status === "lost") return;
+    if (mode === "flag") { toggleFlag(i); return; }
+    if (mode === "scan") { scan(i); setMode("open"); return; }
+    if (opened[i]) chord(i); else reveal(i);
+  }
+
+  const cellOf = (target) => {
+    const b = target.closest ? target.closest(".cell") : null;
+    return b ? Number(b.dataset.i) : -1;
+  };
+
+  el.board.addEventListener("pointerdown", (event) => {
+    longPressed = false;
+    if (event.button !== 0) return;
+    const i = cellOf(event.target);
+    if (i < 0) return;
+    window.clearTimeout(longTimer);
+    longTimer = window.setTimeout(() => { longPressed = true; moveCursor(i); toggleFlag(i); }, LONG_PRESS_MS);
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((type) => el.board.addEventListener(type, () => window.clearTimeout(longTimer)));
+  el.board.addEventListener("click", (event) => {
+    if (longPressed) { longPressed = false; return; }
+    if (status === "won" || status === "lost") return;   // 끝난 뒤에는 표시가 지워지지 않게 무시
+    const i = cellOf(event.target);
+    if (i < 0) return;
+    moveCursor(i);
+    act(i);
+  });
+  el.board.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    if (longPressed) return;           // 폰에서 길게 누르면 이미 표시했으므로 한 번 더 바꾸지 않음
+    const i = cellOf(event.target);
+    if (i >= 0) { moveCursor(i); toggleFlag(i); }
+  });
+
+  $("btn-new").addEventListener("click", newGame);
+  $("btn-again").addEventListener("click", newGame);
+  el.modes.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  el.diffs.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    saved.difficulty = b.dataset.diff;
+    persist();
+    newGame();
+  }));
+
+  document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    const code = event.code;
+    const onControl = event.target && event.target.closest && event.target.closest(".seg, .ghost, .btn-main, summary");
+    if (code === "KeyR") { event.preventDefault(); newGame(); return; }
+    if (onControl) return;               // 버튼에 포커스가 있을 때는 그 버튼의 기본 동작을 방해하지 않음
+    if (status === "won" || status === "lost") return;
+    let next = cursor;
+    const x = cursor % cols, y = Math.floor(cursor / cols);
+    switch (code) {
+      case "ArrowLeft": next = y * cols + Math.max(0, x - 1); break;
+      case "ArrowRight": next = y * cols + Math.min(cols - 1, x + 1); break;
+      case "ArrowUp": next = Math.max(0, y - 1) * cols + x; break;
+      case "ArrowDown": next = Math.min(rows - 1, y + 1) * cols + x; break;
+      case "Enter": case "Space": event.preventDefault(); act(cursor); return;
+      case "KeyF": event.preventDefault(); toggleFlag(cursor); return;
+      case "KeyS": event.preventDefault(); scan(cursor); return;
+      default: return;
+    }
+    event.preventDefault();
+    moveCursor(next);
+  });
+
+  // 다른 탭으로 가 있던 시간은 기록에 넣지 않습니다.
+  document.addEventListener("visibilitychange", () => {
+    if (status !== "playing") return;
+    if (document.hidden) { pausedAt = performance.now(); stopTimer(); }
+    else { startAt += performance.now() - pausedAt; timerId = window.setInterval(hud, 200); }
+  });
+  window.addEventListener("resize", layout);
+
+  /* ================= 시작 ================= */
+  loadSaved();
+  newGame();
+})();
+</script>

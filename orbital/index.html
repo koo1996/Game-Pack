@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; base-uri 'none'; form-action 'none'">
+<title>뿌셔뿌셔</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 컨셉: 우주 정거장 정비 갑판. 깊은 남색 우주, 금속 모듈, 연료 셀의 황금빛 하나만 따뜻한 색.
+   의도적으로 어두운 단일 테마라서 밝은 테마 블록은 두지 않는다. */
+:root {
+  --bg: #070b14;
+  --panel: #0f1626;
+  --panel-2: #141d33;
+  --line: rgba(140, 170, 255, 0.16);
+  --fg: #e6eeff;
+  --muted: #7f92b8;
+  --accent: #5ee1ff;
+  --gold: #ffc83d;
+  --bad: #ff7a7a;
+  --good: #5eecb0;
+  --font-body: "Noto Sans KR", system-ui, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --font-num: "Chakra Petch", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background-color: var(--bg); }
+body {
+  color: var(--fg);
+  font: 400 14px/1.5 var(--font-body);
+  background-image: radial-gradient(1100px 520px at 50% -12%, #14224a 0%, rgba(7, 11, 20, 0) 70%);
+  background-repeat: no-repeat;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.app { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; user-select: none; -webkit-user-select: none; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { margin: 0; font: 700 22px/1.2 var(--font-num); letter-spacing: 0.06em; }
+h1 small { display: block; font: 400 11px/1.4 var(--font-body); letter-spacing: 0; color: var(--muted); }
+.ghost { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 10px; padding: 8px 12px; min-height: 40px; }
+kbd { font: 700 11px/1 var(--font-body); padding: 3px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); color: inherit; }
+
+/* ---------- 판 ---------- */
+.fieldwrap { position: relative; }
+.playfield { display: grid; grid-template-columns: 76px auto minmax(76px, auto); justify-content: center; gap: 10px; align-items: start; }
+.side { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.lbl { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-align: center; }
+.slot { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: grid; place-items: center; }
+.stat { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px 4px; text-align: center; }
+.stat b { display: block; font: 700 18px/1.2 var(--font-num); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat span { font-size: 10px; color: var(--muted); }
+.stat.score b { color: var(--accent); }
+.stage { position: relative; line-height: 0; }
+#board { display: block; border-radius: 10px; border: 1px solid var(--line); box-shadow: 0 0 0 1px rgba(94, 225, 255, 0.08), 0 10px 36px rgba(0, 0, 0, 0.55); touch-action: none; }
+.cpu-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cpu-wrap canvas { display: block; border-radius: 8px; border: 1px solid var(--line); }
+.cpu-wrap .stat { padding: 4px; }
+.cpu-wrap .stat b { font-size: 15px; }
+.playfield[data-mode="solo"] .cpu-wrap { display: none; }
+
+.popup {
+  position: absolute; left: 50%; top: 14%; transform: translateX(-50%); line-height: 1.3; white-space: nowrap;
+  font: 700 15px/1.3 var(--font-num); color: #20160a; background: var(--gold); border-radius: 999px; padding: 6px 14px;
+  box-shadow: 0 0 24px rgba(255, 200, 61, 0.6); opacity: 0; pointer-events: none;
+}
+.popup.show { animation: pop 1.3s ease-out forwards; }
+@keyframes pop {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.9); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -14px); }
+}
+
+.overlay {
+  position: absolute; inset: 0; border-radius: 12px; display: grid; place-items: center; padding: 12px; line-height: 1.5;
+  background: rgba(7, 11, 20, 0.88); text-align: center;
+}
+.overlay h2 { margin: 0 0 6px; font: 700 24px/1.2 var(--font-num); letter-spacing: 0.06em; }
+.overlay h2.win { color: var(--good); }
+.overlay h2.lose { color: var(--bad); }
+.overlay p { margin: 0 0 12px; color: var(--muted); font-size: 13px; text-wrap: balance; }
+.overlay .gold { color: var(--gold); font-weight: 700; }
+.ov-box { width: 100%; max-width: 300px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin: 0 0 10px; }
+.seg button {
+  min-height: 42px; padding: 0 6px; border: 1px solid var(--line); border-radius: 10px; background: transparent;
+  color: var(--muted); font-size: 13px; font-weight: 500;
+}
+.seg button[aria-pressed="true"] { background: rgba(94, 225, 255, 0.16); border-color: rgba(94, 225, 255, 0.55); color: var(--accent); font-weight: 700; }
+.ov-btns { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 4px; }
+.btn-main { min-height: 48px; padding: 0 28px; border: 0; border-radius: 12px; background: var(--accent); color: #05222b; font-weight: 700; font-size: 16px; }
+.btn-sub { min-height: 40px; padding: 0 18px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); }
+
+/* ---------- 조작 패드 ---------- */
+.pad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.key {
+  min-height: 52px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
+  font-weight: 700; font-size: 15px; display: grid; place-items: center; transition: transform 0.06s, background 0.12s;
+}
+.key:active { transform: scale(0.96); background: #1c2848; }
+.key.drop { background: rgba(94, 225, 255, 0.16); border-color: rgba(94, 225, 255, 0.4); color: var(--accent); }
+
+details.guide { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+details.guide > summary { list-style: none; cursor: pointer; padding: 12px 14px; font-weight: 500; display: flex; justify-content: space-between; }
+details.guide > summary::-webkit-details-marker { display: none; }
+details.guide > summary::after { content: "＋"; color: var(--muted); }
+details.guide[open] > summary::after { content: "－"; }
+.inner { padding: 0 14px 14px; }
+.keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0; padding: 0; list-style: none; }
+.keys li { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.keys kbd { min-width: 44px; text-align: center; padding: 5px 6px; }
+.note { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .popup.show { animation: none; opacity: 1; }
+  * { transition: none !important; }
+}
+.portal-back { align-self: flex-start; color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 0; min-height: 32px; }
+.portal-back:hover { color: var(--fg); }
+</style>
+
+<main class="app" id="app">
+  <a class="portal-back" href="../index.html">← 게임 메뉴</a>
+  <header class="top">
+    <h1>뿌셔뿌셔<small>모듈을 맞춰 줄을 완성하세요</small></h1>
+    <button class="ghost" id="btn-pause" type="button">일시정지 <kbd>P</kbd></button>
+  </header>
+
+  <div class="fieldwrap">
+    <section class="playfield" id="playfield" data-mode="solo">
+      <div class="side">
+        <span class="lbl">보관</span>
+        <div class="slot"><canvas id="hold" aria-label="보관한 모듈"></canvas></div>
+        <div class="stat score"><b id="s-score">0</b><span>점수</span></div>
+        <div class="stat"><b id="s-lines">0</b><span>완성한 줄</span></div>
+        <div class="stat"><b id="s-level">1</b><span>레벨</span></div>
+        <div class="stat"><b id="s-best">0</b><span id="s-best-label">최고 점수</span></div>
+      </div>
+
+      <div class="stage" id="stage">
+        <canvas id="board" aria-label="내 판"></canvas>
+        <div class="popup" id="popup" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="side">
+        <div class="cpu-wrap" id="cpu-wrap">
+          <span class="lbl" id="cpu-label">컴퓨터</span>
+          <canvas id="cpu" aria-label="컴퓨터 판"></canvas>
+          <div class="stat"><b id="c-score">0</b><span>컴퓨터 점수</span></div>
+        </div>
+        <span class="lbl">다음</span>
+        <div class="slot"><canvas id="next" aria-label="다음 모듈"></canvas></div>
+      </div>
+    </section>
+
+    <div class="overlay" id="overlay">
+      <div class="ov-box">
+        <h2 id="ov-title">뿌셔뿌셔</h2>
+        <p id="ov-body"></p>
+        <div class="seg" id="ov-modes" role="group" aria-label="게임 방식">
+          <button type="button" data-mode="solo" aria-pressed="true">혼자 하기</button>
+          <button type="button" data-mode="versus" aria-pressed="false">컴퓨터와 대결</button>
+        </div>
+        <div class="seg" id="ov-diff" role="group" aria-label="컴퓨터 난이도" hidden>
+          <button type="button" data-diff="easy" aria-pressed="false">쉬움</button>
+          <button type="button" data-diff="normal" aria-pressed="true">보통</button>
+          <button type="button" data-diff="hard" aria-pressed="false">어려움</button>
+        </div>
+        <div class="ov-btns">
+          <button class="btn-main" id="ov-main" type="button">출항</button>
+          <button class="btn-sub" id="ov-sub" type="button" hidden>메뉴로</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="pad" id="pad" aria-label="화면 조작 버튼">
+    <button class="key" id="k-left" type="button" aria-label="왼쪽으로 이동">◀</button>
+    <button class="key" id="k-rot" type="button" aria-label="회전">회전</button>
+    <button class="key" id="k-right" type="button" aria-label="오른쪽으로 이동">▶</button>
+    <button class="key" id="k-down" type="button" aria-label="천천히 내리기">▼</button>
+    <button class="key drop" id="k-drop" type="button" aria-label="바로 도킹">도킹</button>
+    <button class="key" id="k-hold" type="button" aria-label="모듈 보관">보관</button>
+  </section>
+
+  <details class="guide">
+    <summary>조작법과 규칙</summary>
+    <div class="inner">
+      <ul class="keys">
+        <li><kbd>←</kbd><kbd>→</kbd>이동</li>
+        <li><kbd>↑</kbd><kbd>X</kbd>회전</li>
+        <li><kbd>Z</kbd>반대로 회전</li>
+        <li><kbd>↓</kbd>천천히 내리기</li>
+        <li><kbd>Space</kbd>바로 도킹</li>
+        <li><kbd>C</kbd>모듈 보관</li>
+        <li><kbd>P</kbd>일시정지</li>
+        <li><kbd>R</kbd>처음부터 (정지 중)</li>
+      </ul>
+      <p class="note">줄을 한꺼번에 많이 완성할수록 점수가 커지고, 황금 칸(연료 셀)이 든 줄을 지우면 칸마다 보너스를 받습니다. 줄 10개마다 레벨이 오르고 더 빨라집니다.</p>
+      <p class="note"><b>컴퓨터와 대결:</b> 한 번에 2줄 이상 지우거나 황금 칸이 든 줄을 지우면 상대 판 아래에 구멍이 하나 뚫린 방해 줄이 올라옵니다. 내가 받을 방해 줄(판 왼쪽의 빨간 막대)이 있을 때 줄을 지우면 그만큼 막아 냅니다. 먼저 꼭대기까지 차는 쪽이 집니다.</p>
+    </div>
+  </details>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ================= 규칙과 모양 ================= */
+  const COLS = 10, ROWS = 20;
+  const KEYS = ["I", "O", "T", "S", "Z", "J", "L"];
+  // 0은 빈 칸, 1은 일반 칸. 게임 중에 2는 황금 칸(연료 셀)으로 쓴다.
+  const SHAPES = {
+    I: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
+    O: [[1, 1], [1, 1]],
+    T: [[0, 1, 0], [1, 1, 1], [0, 0, 0]],
+    S: [[0, 1, 1], [1, 1, 0], [0, 0, 0]],
+    Z: [[1, 1, 0], [0, 1, 1], [0, 0, 0]],
+    J: [[1, 0, 0], [1, 1, 1], [0, 0, 0]],
+    L: [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
+  };
+  // 모듈 색: 정거장 외벽 같은 차분한 금속 색. X는 방해 줄(파편)
+  const COLORS = { I: "#9b8cff", O: "#3fc1b0", T: "#ff8a7a", S: "#6cb6ff", Z: "#b9c3d9", J: "#7ee0a5", L: "#f29bc4", X: "#56627f" };
+  const GOLD = "#ffc83d";
+  const LINE_POINTS = [0, 100, 260, 450, 700];  // 한 번에 완성한 줄 수별 점수 (× 레벨)
+  const GOLD_BONUS = 250;                       // 지운 황금 칸 하나당 보너스 (× 레벨)
+  const GOLD_CHANCE = 0.3;                      // 새 모듈에 황금 칸이 들어갈 확률
+  const LINES_PER_LEVEL = 10;
+  const SEND_TABLE = [0, 0, 1, 2, 3];           // 한 번에 지운 줄 수별로 상대에게 보내는 방해 줄
+  const MAX_GARBAGE_AT_ONCE = 8;
+  const KICKS = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0], [0, -1]];
+  const DIFFS = {
+    easy: { label: "쉬움", think: 520, noise: 0.3, pool: 4 },
+    normal: { label: "보통", think: 280, noise: 0.1, pool: 2 },
+    hard: { label: "어려움", think: 110, noise: 0, pool: 1 },
+  };
+  const CPU_RATIO = 0.6;                        // 컴퓨터 판은 내 판보다 작게 그린다
+
+  const rand = (n) => Math.floor(Math.random() * n);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const emptyBoard = () => Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  const rotateCW = (m) => { const n = m.length; return Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => m[n - 1 - c][r])); };
+  const rotateCCW = (m) => { const n = m.length; return Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => m[c][n - 1 - r])); };
+
+  function placeAtTop(p) {
+    p.m = p.base.map((row) => row.slice());
+    p.rot = 0;
+    p.x = Math.floor((COLS - p.m.length) / 2);
+    p.y = p.key === "I" ? -1 : 0;
+    return p;
+  }
+
+  /* ================= 판 하나의 규칙 (사람과 컴퓨터가 같은 규칙을 씁니다) ================= */
+  class Field {
+    constructor() {
+      this.events = {};
+      this.reset();
+    }
+
+    reset() {
+      this.board = emptyBoard();
+      this.bag = [];
+      this.queue = [this.makeModule(), this.makeModule(), this.makeModule()];
+      this.held = null;
+      this.canHold = true;
+      this.cur = null;
+      this.score = 0; this.lines = 0; this.level = 1;
+      this.state = "playing";      // playing, clearing, dead
+      this.acc = 0;
+      this.pending = 0;            // 앞으로 받게 될 방해 줄
+      this.flashRows = []; this.fullRows = [];
+      this.clearTimer = 0; this.flashT = 0;
+      this.spawn();
+    }
+
+    nextKey() {
+      if (this.bag.length === 0) {
+        this.bag = KEYS.slice();
+        for (let i = this.bag.length - 1; i > 0; i--) {
+          const j = rand(i + 1);
+          [this.bag[i], this.bag[j]] = [this.bag[j], this.bag[i]];
+        }
+      }
+      return this.bag.pop();
+    }
+
+    makeModule() {
+      const key = this.nextKey();
+      const base = SHAPES[key].map((row) => row.slice());
+      if (Math.random() < GOLD_CHANCE) {
+        const filled = [];
+        base.forEach((row, r) => row.forEach((v, c) => { if (v) filled.push([r, c]); }));
+        const [r, c] = filled[rand(filled.length)];
+        base[r][c] = 2;
+      }
+      return { key, base, m: base.map((row) => row.slice()), x: 0, y: 0, rot: 0 };
+    }
+
+    collides(m, x, y) {
+      for (let r = 0; r < m.length; r++) {
+        for (let c = 0; c < m[r].length; c++) {
+          if (!m[r][c]) continue;
+          const nx = x + c, ny = y + r;
+          if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+          if (ny >= 0 && this.board[ny][nx]) return true;
+        }
+      }
+      return false;
+    }
+
+    dropInterval() { return Math.max(90, 800 - (this.level - 1) * 65); }
+
+    spawn() {
+      const mod = this.queue.shift();
+      this.queue.push(this.makeModule());
+      this.cur = placeAtTop(mod);
+      this.acc = 0;
+      if (this.collides(this.cur.m, this.cur.x, this.cur.y)) this.die();
+    }
+
+    die() {
+      if (this.state === "dead") return;
+      this.state = "dead";
+      this.cur = null;
+      if (this.events.onDead) this.events.onDead();
+    }
+
+    get active() { return this.state === "playing" && !!this.cur; }
+
+    move(dx, dy) {
+      if (!this.active || this.collides(this.cur.m, this.cur.x + dx, this.cur.y + dy)) return false;
+      this.cur.x += dx; this.cur.y += dy;
+      return true;
+    }
+
+    rotate(dir) {
+      if (!this.active) return false;
+      const rotated = dir > 0 ? rotateCW(this.cur.m) : rotateCCW(this.cur.m);
+      for (const [dx, dy] of KICKS) {
+        if (!this.collides(rotated, this.cur.x + dx, this.cur.y + dy)) {
+          this.cur.m = rotated; this.cur.x += dx; this.cur.y += dy;
+          this.cur.rot = (this.cur.rot + (dir > 0 ? 1 : 3)) % 4;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    softDrop() {
+      if (!this.active) return;
+      if (this.move(0, 1)) { this.score += 1; this.acc = 0; } else { this.lock(); }
+    }
+
+    hardDrop() {
+      if (!this.active) return;
+      let rows = 0;
+      while (this.move(0, 1)) rows++;
+      this.score += rows * 2;
+      this.lock();
+    }
+
+    hold() {
+      if (!this.active || !this.canHold) return;
+      this.canHold = false;
+      const incoming = this.held;
+      this.held = this.cur;
+      if (incoming) {
+        this.cur = placeAtTop(incoming);
+        this.acc = 0;
+        if (this.collides(this.cur.m, this.cur.x, this.cur.y)) this.die();
+      } else {
+        this.spawn();
+      }
+    }
+
+    lock() {
+      let aboveTop = false;
+      this.cur.m.forEach((row, r) => row.forEach((v, c) => {
+        if (!v) return;
+        const x = this.cur.x + c, y = this.cur.y + r;
+        if (y < 0) { aboveTop = true; return; }
+        this.board[y][x] = { k: this.cur.key, g: v === 2 };
+      }));
+      if (aboveTop) { this.die(); return; }
+      this.canHold = true;
+
+      const full = [];
+      for (let y = 0; y < ROWS; y++) if (this.board[y].every(Boolean)) full.push(y);
+      if (full.length === 0) {
+        this.applyPending();
+        if (this.state === "playing") this.spawn();
+        return;
+      }
+      this.state = "clearing";
+      this.fullRows = full;
+      this.flashRows = full;
+      this.flashT = 0;
+      this.clearTimer = reduceMotion ? 0 : 200;
+      this.cur = null;
+    }
+
+    finishClear() {
+      const full = this.fullRows;
+      let gold = 0;
+      full.forEach((y) => this.board[y].forEach((c) => { if (c && c.g) gold++; }));
+      this.board = this.board.filter((_, y) => !full.includes(y));
+      while (this.board.length < ROWS) this.board.unshift(Array(COLS).fill(null));
+
+      const goldScore = gold * GOLD_BONUS * this.level;
+      this.score += LINE_POINTS[Math.min(full.length, 4)] * this.level + goldScore;
+      this.lines += full.length;
+      this.level = 1 + Math.floor(this.lines / LINES_PER_LEVEL);
+      this.flashRows = []; this.fullRows = [];
+      this.state = "playing";
+
+      // 받을 방해 줄이 있으면 먼저 상쇄하고, 남은 만큼만 상대에게 보냅니다.
+      let send = SEND_TABLE[Math.min(full.length, 4)] + (gold > 0 ? 1 : 0);
+      const cancel = Math.min(this.pending, send);
+      this.pending -= cancel;
+      send -= cancel;
+      if (this.events.onClear) this.events.onClear({ lines: full.length, gold, goldScore, send });
+
+      this.applyPending();
+      if (this.state === "playing") this.spawn();
+    }
+
+    receiveGarbage(n) { this.pending += n; }
+
+    applyPending() {
+      if (this.pending <= 0) return;
+      const n = Math.min(this.pending, MAX_GARBAGE_AT_ONCE);
+      this.pending -= n;
+      const hole = rand(COLS);
+      let toppedOut = false;
+      for (let i = 0; i < n; i++) {
+        const removed = this.board.shift();
+        if (removed.some(Boolean)) toppedOut = true;
+        this.board.push(Array.from({ length: COLS }, (_, x) => (x === hole ? null : { k: "X", g: false })));
+      }
+      if (toppedOut) this.die();
+    }
+
+    update(dt) {
+      if (this.state === "clearing") {
+        this.clearTimer -= dt;
+        this.flashT += dt;
+        if (this.clearTimer <= 0) this.finishClear();
+        return;
+      }
+      if (!this.active) return;
+      this.acc += dt;
+      const interval = this.dropInterval();
+      while (this.acc >= interval && this.active) {
+        this.acc -= interval;
+        if (!this.move(0, 1)) { this.lock(); break; }
+      }
+    }
+  }
+
+  /* ================= 컴퓨터 ================= */
+  // 모듈을 놓을 수 있는 자리를 모두 시험해 보고, 가장 점수가 좋은 자리를 고릅니다.
+  function evaluatePlacement(field, m, x, y) {
+    const grid = field.board.map((row) => row.map((c) => (c ? 1 : 0)));
+    const goldRow = {};
+    field.board.forEach((row, ry) => row.forEach((c) => { if (c && c.g) goldRow[ry] = (goldRow[ry] || 0) + 1; }));
+    m.forEach((row, r) => row.forEach((v, c) => {
+      if (!v) return;
+      const gy = y + r, gx = x + c;
+      if (gy < 0) return;
+      grid[gy][gx] = 1;
+      if (v === 2) goldRow[gy] = (goldRow[gy] || 0) + 1;
+    }));
+    let cleared = 0, goldCleared = 0;
+    const kept = [];
+    grid.forEach((row, ry) => {
+      if (row.every(Boolean)) { cleared++; goldCleared += goldRow[ry] || 0; } else { kept.push(row); }
+    });
+    while (kept.length < ROWS) kept.unshift(Array(COLS).fill(0));
+
+    const heights = Array(COLS).fill(0);
+    let holes = 0;
+    for (let cx = 0; cx < COLS; cx++) {
+      let seen = false;
+      for (let ry = 0; ry < ROWS; ry++) {
+        if (kept[ry][cx]) { if (!seen) { heights[cx] = ROWS - ry; seen = true; } } else if (seen) { holes++; }
+      }
+    }
+    const aggregate = heights.reduce((a, b) => a + b, 0);
+    let bumpiness = 0;
+    for (let cx = 0; cx < COLS - 1; cx++) bumpiness += Math.abs(heights[cx] - heights[cx + 1]);
+    return -0.51 * aggregate + 0.76 * cleared - 0.36 * holes - 0.18 * bumpiness + 0.3 * goldCleared;
+  }
+
+  class Bot {
+    constructor(field, difficulty) {
+      this.field = field;
+      this.cfg = DIFFS[difficulty] || DIFFS.normal;
+      this.timer = 0;
+      this.plan = null;
+      this.planFor = null;
+      this.stuck = 0;
+    }
+
+    choose() {
+      const f = this.field;
+      const options = [];
+      let m = f.cur.m;
+      for (let r = 0; r < 4; r++) {
+        for (let x = -3; x < COLS; x++) {
+          if (f.collides(m, x, f.cur.y)) continue;
+          let y = f.cur.y;
+          while (!f.collides(m, x, y + 1)) y++;
+          options.push({ rot: (f.cur.rot + r) % 4, x, score: evaluatePlacement(f, m, x, y) });
+        }
+        m = rotateCW(m);
+      }
+      if (options.length === 0) return null;
+      options.sort((a, b) => b.score - a.score);
+      // 낮은 난이도일수록 가끔 최선이 아닌 자리를 고릅니다.
+      if (Math.random() < this.cfg.noise) return options[rand(Math.min(this.cfg.pool, options.length))];
+      return options[0];
+    }
+
+    update(dt) {
+      const f = this.field;
+      if (!f.active) { this.plan = null; this.planFor = null; return; }
+      this.timer += dt;
+      if (this.timer < this.cfg.think) return;
+      this.timer = 0;
+
+      if (this.planFor !== f.cur) { this.plan = this.choose(); this.planFor = f.cur; this.stuck = 0; }
+      const p = this.plan;
+      if (!p || this.stuck > 6) { f.hardDrop(); return; }
+      if (f.cur.rot !== p.rot) { if (!f.rotate(1)) this.stuck++; return; }
+      if (f.cur.x !== p.x) {
+        if (!f.move(p.x > f.cur.x ? 1 : -1, 0)) this.stuck++;
+        return;
+      }
+      f.hardDrop();
+    }
+  }
+
+  /* ================= 저장 (이 브라우저에만) ================= */
+  const BEST_KEY = "orbital-dock-best-v1";
+  const PREFS_KEY = "orbital-dock-prefs-v1";
+  let best = 0;
+  let prefs = { mode: "solo", difficulty: "normal", wins: 0, losses: 0 };
+  function loadSaved() {
+    try {
+      const b = parseInt(localStorage.getItem(BEST_KEY), 10);
+      if (Number.isInteger(b) && b > 0) best = b;
+      const p = JSON.parse(localStorage.getItem(PREFS_KEY));
+      if (p && (p.mode === "solo" || p.mode === "versus")) prefs.mode = p.mode;
+      if (p && DIFFS[p.difficulty]) prefs.difficulty = p.difficulty;
+      if (p && Number.isInteger(p.wins) && p.wins >= 0) prefs.wins = p.wins;
+      if (p && Number.isInteger(p.losses) && p.losses >= 0) prefs.losses = p.losses;
+    } catch (e) { /* 저장된 값이 없거나 읽을 수 없으면 기본값으로 시작 */ }
+  }
+  function saveBest() { try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) { /* 저장 불가 환경 */ } }
+  function savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* 저장 불가 환경 */ } }
+
+  /* ================= 화면 ================= */
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    app: $("app"), playfield: $("playfield"), board: $("board"), cpu: $("cpu"), hold: $("hold"), next: $("next"),
+    score: $("s-score"), lines: $("s-lines"), level: $("s-level"), best: $("s-best"), bestLabel: $("s-best-label"),
+    cScore: $("c-score"), cpuLabel: $("cpu-label"), popup: $("popup"),
+    overlay: $("overlay"), ovTitle: $("ov-title"), ovBody: $("ov-body"), ovMain: $("ov-main"), ovSub: $("ov-sub"),
+    ovModes: $("ov-modes"), ovDiff: $("ov-diff"), pause: $("btn-pause"),
+  };
+  const ctx = el.board.getContext("2d");
+  const cctx = el.cpu.getContext("2d");
+  const hctx = el.hold.getContext("2d");
+  const nctx = el.next.getContext("2d");
+
+  let mode = "solo";            // solo, versus
+  let phase = "menu";           // menu, playing, paused, over
+  let player = new Field();
+  let cpu = null, bot = null;
+  let cell = 24, cpuCell = 14, miniSize = 12, dpr = 1;
+  let lastTime = 0;
+
+  function setupCanvas(canvas, c, w, h) {
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function layout() {
+    dpr = window.devicePixelRatio || 1;
+    const appW = el.app.clientWidth;
+    const availH = Math.max(280, window.innerHeight - 250);
+    const versus = mode === "versus";
+    let size = 14;
+    for (let s = 30; s >= 14; s--) {
+      const mini = clamp(Math.floor(s * 0.62), 10, 15);
+      const right = versus ? Math.max(Math.floor(s * CPU_RATIO) * COLS + 2, 4 * mini + 14) : 4 * mini + 14;
+      const need = 76 + COLS * s + Math.max(76, right) + 20;
+      if (need <= appW && s * ROWS <= availH) { size = s; break; }
+    }
+    cell = size;
+    cpuCell = Math.max(8, Math.floor(cell * CPU_RATIO));
+    miniSize = clamp(Math.floor(cell * 0.62), 10, 15);
+    setupCanvas(el.board, ctx, COLS * cell, ROWS * cell);
+    setupCanvas(el.cpu, cctx, COLS * cpuCell, ROWS * cpuCell);
+    setupCanvas(el.hold, hctx, 4 * miniSize, 3 * miniSize);
+    setupCanvas(el.next, nctx, 4 * miniSize, 3 * 3 * miniSize + 6);
+  }
+
+  function updateHud() {
+    el.score.textContent = player.score.toLocaleString("ko-KR");
+    el.lines.textContent = String(player.lines);
+    el.level.textContent = String(player.level);
+    if (mode === "versus") {
+      el.bestLabel.textContent = "전적 (승/패)";
+      el.best.textContent = prefs.wins + " / " + prefs.losses;
+      el.cScore.textContent = cpu ? cpu.score.toLocaleString("ko-KR") : "0";
+    } else {
+      el.bestLabel.textContent = "최고 점수";
+      el.best.textContent = Math.max(best, player.score).toLocaleString("ko-KR");
+    }
+  }
+
+  function setMode(next) {
+    mode = next;
+    el.playfield.dataset.mode = mode;
+    if (mode === "versus") {
+      if (!cpu) cpu = new Field();
+      el.cpuLabel.textContent = "컴퓨터 · " + DIFFS[prefs.difficulty].label;
+    } else {
+      cpu = null; bot = null;
+    }
+    el.ovModes.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+    el.ovDiff.hidden = mode !== "versus";
+    el.ovDiff.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.diff === prefs.difficulty)));
+    layout();
+    updateHud();
+  }
+
+  function showOverlay(kind) {
+    el.overlay.hidden = false;
+    el.ovSub.hidden = true;
+    el.ovModes.hidden = kind !== "menu";
+    el.ovDiff.hidden = kind !== "menu" || mode !== "versus";
+    el.ovTitle.className = "";
+    el.ovBody.textContent = "";
+    if (kind === "menu") {
+      el.ovTitle.textContent = "뿌셔뿌셔";
+      el.ovBody.append("모듈을 맞춰 줄을 완성하세요.", document.createElement("br"));
+      const gold = document.createElement("span");
+      gold.className = "gold";
+      gold.textContent = "황금 칸";
+      el.ovBody.append(gold, "이 든 줄을 지우면 보너스!");
+      el.ovMain.textContent = "출항";
+    } else if (kind === "paused") {
+      el.ovTitle.textContent = "일시정지";
+      el.ovBody.textContent = "잠시 쉬어 가세요.";
+      el.ovMain.textContent = "이어하기";
+      el.ovSub.hidden = false;
+    } else if (kind === "solo-over") {
+      el.ovTitle.textContent = "도킹 실패";
+      el.ovBody.textContent = "점수 " + player.score.toLocaleString("ko-KR") + "  ·  줄 " + player.lines + "  ·  레벨 " + player.level +
+        (player.score >= best && player.score > 0 ? "  ·  최고 기록!" : "");
+      el.ovMain.textContent = "다시 도전";
+      el.ovSub.textContent = "메뉴로";
+      el.ovSub.hidden = false;
+    } else {
+      const won = kind === "win";
+      el.ovTitle.textContent = won ? "승리!" : "패배";
+      el.ovTitle.className = won ? "win" : "lose";
+      el.ovBody.textContent = "내 점수 " + player.score.toLocaleString("ko-KR") + "  ·  컴퓨터 " + (cpu ? cpu.score.toLocaleString("ko-KR") : 0) +
+        "  ·  전적 " + prefs.wins + "승 " + prefs.losses + "패";
+      el.ovMain.textContent = "다시 대결";
+      el.ovSub.textContent = "메뉴로";
+      el.ovSub.hidden = false;
+    }
+    if (kind === "paused") el.ovSub.textContent = "메뉴로";
+    el.ovMain.focus({ preventScroll: true });
+  }
+  function hideOverlay() { el.overlay.hidden = true; }
+
+  function showPopup(text) {
+    el.popup.textContent = text;
+    el.popup.classList.remove("show");
+    void el.popup.offsetWidth;          // 같은 애니메이션을 다시 시작하기 위한 줄
+    el.popup.classList.add("show");
+  }
+
+  /* ---------- 게임 진행 ---------- */
+  function startGame() {
+    player.events = {};
+    player.reset();
+    if (mode === "versus") {
+      if (!cpu) cpu = new Field();
+      cpu.events = {};
+      cpu.reset();
+      bot = new Bot(cpu, prefs.difficulty);
+      cpu.events.onClear = (info) => { if (info.send > 0) player.receiveGarbage(info.send); updateHud(); };
+      cpu.events.onDead = () => endMatch(true);
+    } else {
+      cpu = null; bot = null;
+    }
+    player.events.onClear = (info) => {
+      if (info.gold > 0) showPopup("연료 셀 ×" + info.gold + "  +" + info.goldScore);
+      if (cpu && info.send > 0) cpu.receiveGarbage(info.send);
+      updateHud();
+    };
+    player.events.onDead = () => endMatch(false);
+    phase = "playing";
+    lastTime = performance.now();
+    hideOverlay();
+    layout();
+    updateHud();
+  }
+
+  function endMatch(playerWon) {
+    if (phase !== "playing") return;
+    phase = "over";
+    if (mode === "versus") {
+      if (playerWon) prefs.wins += 1; else prefs.losses += 1;
+      savePrefs();
+      updateHud();
+      showOverlay(playerWon ? "win" : "lose");
+    } else {
+      if (player.score > best) { best = player.score; saveBest(); }
+      updateHud();
+      showOverlay("solo-over");
+    }
+  }
+
+  function pause() { if (phase === "playing") { phase = "paused"; showOverlay("paused"); } }
+  function resume() { if (phase === "paused") { phase = "playing"; lastTime = performance.now(); hideOverlay(); } }
+  function toMenu() {
+    phase = "menu";
+    player.reset();
+    if (cpu) cpu.reset();     // 컴퓨터 판에 이전 대결이 남지 않게 함께 비웁니다.
+    setMode(mode);
+    showOverlay("menu");
+  }
+
+  /* ---------- 그리기 ---------- */
+  function drawCell(g, px, py, s, color, isGold, alpha) {
+    g.globalAlpha = alpha === undefined ? 1 : alpha;
+    const pad = Math.max(0.5, s * 0.05);
+    const x = px + pad, y = py + pad, w = s - 2 * pad;
+    const bevel = Math.max(1, s * 0.13);
+    g.fillStyle = isGold ? "#d99a14" : color;
+    g.fillRect(x, y, w, w);
+    g.fillStyle = "rgba(255,255,255,0.30)";
+    g.fillRect(x, y, w, bevel);
+    g.fillRect(x, y, bevel, w);
+    g.fillStyle = "rgba(0,0,0,0.30)";
+    g.fillRect(x, y + w - bevel, w, bevel);
+    g.fillRect(x + w - bevel, y, bevel, w);
+    g.fillStyle = "rgba(0,0,0,0.16)";
+    g.fillRect(x + s * 0.24, y + s * 0.24, w - s * 0.48, w - s * 0.48);
+    if (isGold) {
+      const cx = px + s / 2, cy = py + s / 2, d = s * 0.26;
+      g.save();
+      g.shadowColor = GOLD;
+      g.shadowBlur = s * 0.6;
+      g.fillStyle = GOLD;
+      g.beginPath();
+      g.moveTo(cx, cy - d); g.lineTo(cx + d, cy); g.lineTo(cx, cy + d); g.lineTo(cx - d, cy);
+      g.closePath();
+      g.fill();
+      g.restore();
+    }
+    g.globalAlpha = 1;
+  }
+
+  function drawField(g, field, size, ghost) {
+    const w = COLS * size, h = ROWS * size;
+    const bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, "#0c1426");
+    bg.addColorStop(1, "#080d1a");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, w, h);
+
+    if (size >= 12) {
+      g.strokeStyle = "rgba(140,170,255,0.07)";
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let x = 1; x < COLS; x++) { g.moveTo(x * size + 0.5, 0); g.lineTo(x * size + 0.5, h); }
+      for (let y = 1; y < ROWS; y++) { g.moveTo(0, y * size + 0.5); g.lineTo(w, y * size + 0.5); }
+      g.stroke();
+    }
+    if (!field) return;
+
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const c = field.board[y][x];
+        if (c) drawCell(g, x * size, y * size, size, COLORS[c.k], c.g);
+      }
+    }
+
+    if (field.cur && phase !== "menu") {
+      const cur = field.cur;
+      if (ghost) {
+        let gy = cur.y;
+        while (!field.collides(cur.m, cur.x, gy + 1)) gy++;
+        g.strokeStyle = "rgba(94,225,255,0.55)";
+        g.lineWidth = 1.5;
+        cur.m.forEach((row, r) => row.forEach((v, c) => {
+          if (v && gy + r >= 0) g.strokeRect((cur.x + c) * size + 2, (gy + r) * size + 2, size - 4, size - 4);
+        }));
+      }
+      cur.m.forEach((row, r) => row.forEach((v, c) => {
+        if (v && cur.y + r >= 0) drawCell(g, (cur.x + c) * size, (cur.y + r) * size, size, COLORS[cur.key], v === 2);
+      }));
+    }
+
+    if (field.flashRows.length) {
+      const t = clamp(field.flashT / 200, 0, 1);
+      g.fillStyle = "rgba(255,255,255," + (0.85 * (1 - t * 0.6)).toFixed(2) + ")";
+      field.flashRows.forEach((y) => g.fillRect(0, y * size, w, size));
+    }
+
+    // 받게 될 방해 줄을 왼쪽 빨간 막대로 보여 줍니다.
+    if (field.pending > 0) {
+      const barH = Math.min(field.pending, ROWS) * size;
+      g.fillStyle = "#ff5a5a";
+      g.fillRect(0, h - barH, Math.max(3, size * 0.2), barH);
+    }
+  }
+
+  function drawMini(g, mod, s, slotY, slotW, slotH, dim) {
+    if (!mod) return;
+    let minR = 9, maxR = -1, minC = 9, maxC = -1;
+    mod.base.forEach((row, r) => row.forEach((v, c) => {
+      if (!v) return;
+      minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+      minC = Math.min(minC, c); maxC = Math.max(maxC, c);
+    }));
+    const w = (maxC - minC + 1) * s, h = (maxR - minR + 1) * s;
+    const ox = (slotW - w) / 2, oy = slotY + (slotH - h) / 2;
+    mod.base.forEach((row, r) => row.forEach((v, c) => {
+      if (v) drawCell(g, ox + (c - minC) * s, oy + (r - minR) * s, s, COLORS[mod.key], v === 2, dim ? 0.4 : 1);
+    }));
+  }
+
+  function drawSides() {
+    hctx.clearRect(0, 0, 4 * miniSize, 3 * miniSize);
+    drawMini(hctx, player.held, miniSize, 0, 4 * miniSize, 3 * miniSize, !player.canHold);
+    nctx.clearRect(0, 0, 4 * miniSize, 9 * miniSize + 6);
+    player.queue.slice(0, 3).forEach((mod, i) => drawMini(nctx, mod, miniSize, i * (3 * miniSize + 2), 4 * miniSize, 3 * miniSize, false));
+  }
+
+  /* ---------- 반복 ---------- */
+  function frame(now) {
+    const dt = Math.min(100, now - lastTime);
+    lastTime = now;
+    if (phase === "playing") {
+      player.update(dt);
+      if (cpu && phase === "playing") { cpu.update(dt); if (bot) bot.update(dt); }
+      if (phase === "playing" && cpu && (cpu.score !== Number(el.cScore.dataset.s))) {
+        el.cScore.dataset.s = String(cpu.score);
+        updateHud();
+      }
+    }
+    drawField(ctx, player, cell, true);
+    if (mode === "versus") drawField(cctx, cpu, cpuCell, false);
+    drawSides();
+    window.requestAnimationFrame(frame);
+  }
+
+  /* ================= 입력 ================= */
+  const act = {
+    left: () => { if (phase === "playing") player.move(-1, 0); },
+    right: () => { if (phase === "playing") player.move(1, 0); },
+    down: () => { if (phase === "playing") { player.softDrop(); updateHud(); } },
+    rotate: () => { if (phase === "playing") player.rotate(1); },
+    rotateBack: () => { if (phase === "playing") player.rotate(-1); },
+    drop: () => { if (phase === "playing") { player.hardDrop(); updateHud(); } },
+    hold: () => { if (phase === "playing") player.hold(); },
+  };
+
+  function bindHold(button, action, repeat) {
+    let delay = null, loop = null;
+    const stop = () => { window.clearTimeout(delay); window.clearInterval(loop); delay = loop = null; };
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      action();
+      if (!repeat) return;
+      stop();
+      delay = window.setTimeout(() => { loop = window.setInterval(action, 70); }, 190);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((type) => button.addEventListener(type, stop));
+    window.addEventListener("blur", stop);
+  }
+  bindHold($("k-left"), act.left, true);
+  bindHold($("k-right"), act.right, true);
+  bindHold($("k-down"), act.down, true);
+  bindHold($("k-rot"), act.rotate, false);
+  bindHold($("k-drop"), act.drop, false);
+  bindHold($("k-hold"), act.hold, false);
+
+  el.ovMain.addEventListener("click", () => { if (phase === "paused") resume(); else startGame(); });
+  el.ovSub.addEventListener("click", toMenu);
+  el.pause.addEventListener("click", () => { if (phase === "playing") pause(); else if (phase === "paused") resume(); });
+  el.ovModes.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    prefs.mode = b.dataset.mode; savePrefs(); setMode(prefs.mode);
+  }));
+  el.ovDiff.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    prefs.difficulty = b.dataset.diff; savePrefs(); setMode(mode);
+  }));
+
+  document.addEventListener("keydown", (event) => {
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    const code = event.code;
+
+    if (phase === "menu" || phase === "over") {
+      // 방식·난이도 버튼에 포커스가 있을 때는 그 버튼의 기본 동작(선택)을 방해하지 않습니다.
+      if (event.target && event.target.closest && event.target.closest(".seg")) return;
+      if (code === "Enter" || code === "Space") { event.preventDefault(); startGame(); }
+      return;
+    }
+    if (phase === "paused") {
+      if (code === "KeyP" || code === "Escape" || code === "Enter") { event.preventDefault(); resume(); }
+      else if (code === "KeyR") { event.preventDefault(); startGame(); }
+      return;
+    }
+    if (phase !== "playing") return;
+
+    switch (code) {
+      case "ArrowLeft": act.left(); break;
+      case "ArrowRight": act.right(); break;
+      case "ArrowDown": act.down(); break;
+      case "ArrowUp": case "KeyX": if (!event.repeat) act.rotate(); break;
+      case "KeyZ": if (!event.repeat) act.rotateBack(); break;
+      case "Space": if (!event.repeat) act.drop(); break;
+      case "KeyC": case "ShiftLeft": case "ShiftRight": if (!event.repeat) act.hold(); break;
+      case "KeyP": case "Escape": pause(); break;
+      default: return;
+    }
+    event.preventDefault();
+  });
+
+  // 다른 탭으로 가면 자동으로 일시정지합니다.
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+  window.addEventListener("resize", layout);
+
+  /* ================= 시작 ================= */
+  loadSaved();
+  setMode(prefs.mode);
+  showOverlay("menu");
+  lastTime = performance.now();
+  window.requestAnimationFrame(frame);
+})();
+</script>
