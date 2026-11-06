@@ -4,12 +4,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-k7WKon1U6xPR2/HTO/XCVdTZ5ooOA+pM31QIRKeHj8I='; style-src 'sha256-N2Loq3s0jIZNEcafM/JDxBUAkSZO5iDYAXsum8ZQqB0='; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>뿌셔뿌셔</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <style>
 /* 컨셉: 우주 정거장 정비 갑판. 깊은 남색 우주, 금속 모듈, 연료 셀의 황금빛 하나만 따뜻한 색.
    의도적으로 어두운 단일 테마라서 밝은 테마 블록은 두지 않는다. */
@@ -132,7 +129,7 @@ details.guide[open] > summary::after { content: "－"; }
 </style>
 
 <main class="app" id="app">
-  <a class="portal-back" href="../index.html">← 게임 메뉴</a>
+  <a class="portal-back" href="../index.html">← 게임 메뉴 (Backspace)</a>
   <header class="top">
     <h1>뿌셔뿌셔<small>모듈을 맞춰 줄을 완성하세요</small></h1>
     <button class="ghost" id="btn-pause" type="button">일시정지 <kbd>P</kbd></button>
@@ -179,7 +176,7 @@ details.guide[open] > summary::after { content: "－"; }
           <button type="button" data-diff="hard" aria-pressed="false">어려움</button>
         </div>
         <div class="ov-btns">
-          <button class="btn-main" id="ov-main" type="button">출항</button>
+          <button class="btn-main" id="ov-main" type="button">시작</button>
           <button class="btn-sub" id="ov-sub" type="button" hidden>메뉴로</button>
         </div>
       </div>
@@ -191,7 +188,7 @@ details.guide[open] > summary::after { content: "－"; }
     <button class="key" id="k-rot" type="button" aria-label="회전">회전</button>
     <button class="key" id="k-right" type="button" aria-label="오른쪽으로 이동">▶</button>
     <button class="key" id="k-down" type="button" aria-label="천천히 내리기">▼</button>
-    <button class="key drop" id="k-drop" type="button" aria-label="바로 도킹">도킹</button>
+    <button class="key drop" id="k-drop" type="button" aria-label="하드 드롭">하드 드롭</button>
     <button class="key" id="k-hold" type="button" aria-label="모듈 보관">보관</button>
   </section>
 
@@ -203,7 +200,7 @@ details.guide[open] > summary::after { content: "－"; }
         <li><kbd>↑</kbd><kbd>X</kbd>회전</li>
         <li><kbd>Z</kbd>반대로 회전</li>
         <li><kbd>↓</kbd>천천히 내리기</li>
-        <li><kbd>Space</kbd>바로 도킹</li>
+        <li><kbd>Space</kbd>하드 드롭</li>
         <li><kbd>C</kbd>모듈 보관</li>
         <li><kbd>P</kbd>일시정지</li>
         <li><kbd>R</kbd>처음부터 (정지 중)</li>
@@ -666,14 +663,14 @@ details.guide[open] > summary::after { content: "－"; }
       gold.className = "gold";
       gold.textContent = "황금 칸";
       el.ovBody.append(gold, "이 든 줄을 지우면 보너스!");
-      el.ovMain.textContent = "출항";
+      el.ovMain.textContent = "시작";
     } else if (kind === "paused") {
       el.ovTitle.textContent = "일시정지";
       el.ovBody.textContent = "잠시 쉬어 가세요.";
       el.ovMain.textContent = "이어하기";
       el.ovSub.hidden = false;
     } else if (kind === "solo-over") {
-      el.ovTitle.textContent = "도킹 실패";
+      el.ovTitle.textContent = "게임 오버";
       el.ovBody.textContent = "점수 " + player.score.toLocaleString("ko-KR") + "  ·  줄 " + player.lines + "  ·  레벨 " + player.level +
         (player.score >= best && player.score > 0 ? "  ·  최고 기록!" : "");
       el.ovMain.textContent = "다시 도전";
@@ -961,5 +958,14 @@ details.guide[open] > summary::after { content: "－"; }
   showOverlay("menu");
   lastTime = performance.now();
   window.requestAnimationFrame(frame);
-})();
+
+  // 게임 메뉴로 돌아가기: Backspace (입력칸에 글자를 쓰는 중에는 동작하지 않습니다)
+  document.addEventListener("keydown", (event) => {
+    if (event.code !== "Backspace" || event.ctrlKey || event.altKey || event.metaKey) return;
+    const target = event.target;
+    const tag = target && target.tagName ? target.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "textarea" || (target && target.isContentEditable)) return;
+    event.preventDefault();
+    window.location.href = "../index.html";
+  });})();
 </script>

@@ -4,12 +4,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-ymMKxPnJlZy1HKboLnpQxNpMX2/RQJ0RqM12ybPCYB8='; style-src 'sha256-vFZnPBrbg7c6jjBm3rb5UAsAcslYkvS3Q5vpHEYWUHE='; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>선수 강화 시뮬레이터</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <style>
 /* 컨셉: 한 손으로 조작하는 어두운 남색 카드 한 장. 선수 카드가 강화 등급의 색으로 물든다.
    단일 테마(어두운 화면)로 의도했기 때문에 밝은 테마 블록은 두지 않는다. */
@@ -50,6 +47,7 @@ button { cursor: pointer; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 h1 { margin: 0; font-size: 20px; font-weight: 700; text-wrap: balance; }
 h2 { margin: 4px 0 -4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+h2.plain { margin: 0; }
 
 .ghost {
   border: 1px solid var(--line); background: transparent; color: var(--muted);
@@ -192,7 +190,7 @@ details.panel[open] > summary::after { content: "－"; }
 </style>
 
 <main class="app">
-  <a class="portal-back" href="../index.html">← 게임 메뉴</a>
+  <a class="portal-back" href="../index.html">← 게임 메뉴 (Backspace)</a>
   <header class="top">
     <h1>선수 강화 시뮬레이터</h1>
     <button class="ghost" id="btn-settings" type="button" aria-expanded="false" aria-controls="settings">설정 <kbd>S</kbd></button>
@@ -200,7 +198,7 @@ details.panel[open] > summary::after { content: "－"; }
 
   <section class="panel" id="settings" hidden>
     <form class="form" id="settings-form" autocomplete="off">
-      <h2 style="margin:0">설정</h2>
+      <h2 class="plain">설정</h2>
       <label class="field">선수 이름<input id="in-name" type="text" maxlength="20"></label>
       <label class="field">기본 종합 능력치 (1~180)<input id="in-ovr" type="text" inputmode="numeric"></label>
       <label class="field">초기 코인<input id="in-coins" type="text" inputmode="numeric"></label>
@@ -740,5 +738,14 @@ details.panel[open] > summary::after { content: "－"; }
   loadRecord();
   renderInfoTable();
   render();
-})();
+
+  // 게임 메뉴로 돌아가기: Backspace (입력칸에 글자를 쓰는 중에는 동작하지 않습니다)
+  document.addEventListener("keydown", (event) => {
+    if (event.code !== "Backspace" || event.ctrlKey || event.altKey || event.metaKey) return;
+    const target = event.target;
+    const tag = target && target.tagName ? target.tagName.toLowerCase() : "";
+    if (tag === "input" || tag === "textarea" || (target && target.isContentEditable)) return;
+    event.preventDefault();
+    window.location.href = "../index.html";
+  });})();
 </script>
